@@ -8,8 +8,18 @@
   <script>
     // Error Handler Global
     window.onerror = function(msg, url, line, col, error) {
-        // Silent error agar tidak mengganggu user, cek console jika perlu
-        console.error(msg, error);
+        const app = document.getElementById('app');
+        if (app) {
+            app.innerHTML = `
+                <div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">
+                    <h3>Terjadi Kesalahan Aplikasi</h3>
+                    <p>${msg}</p>
+                    <button onclick="localStorage.clear(); location.reload();" style="margin-top:10px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Reset & Reload Aplikasi
+                    </button>
+                </div>
+            `;
+        }
         return false;
     };
 
@@ -34,6 +44,20 @@
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        
+        /* Animasi */
+        @keyframes pulseBlue {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+          70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        @keyframes pulseGreen {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+          70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .pulse-blue { animation: pulseBlue 2s infinite; }
+        .pulse-green { animation: pulseGreen 2s infinite; }
     </style>
  </head>
  <body class="h-full bg-gray-50">
@@ -281,21 +305,17 @@
 
         // --- SINKRONISASI DATA ---
         
-        // PERBAIKAN: Fungsi parsing yang bisa menangani JSON ganda dan object
         function parseRecordData(d) { 
             if (!d) return null;
             if (typeof d === 'object') return d;
             
             try { 
-                // Coba parse pertama
                 let parsed = JSON.parse(d);
-                // Jika hasil parse masih string, berarti kena double stringify, parse lagi
                 if (typeof parsed === 'string') {
                     return JSON.parse(parsed);
                 }
                 return parsed;
             } catch (e) { 
-                // Jika gagal parse (berarti string biasa), kembalikan as-is
                 return d; 
             } 
         }
@@ -313,29 +333,23 @@
                 const result = await response.json();
                 
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    // PERBAIKAN: Perbarui allRecords agar Rekap Saya tidak kosong
-                    // Kita akan map data dari cloud ke format allRecords local
                     const cloudRecords = result.data.map(item => ({
                         nama: currentUser.nama,
                         kelas: currentUser.kelas,
                         kategori: item.kategori,
                         tanggal: item.tanggal,
-                        hadir: item.detail || item.hadir // Fallback untuk nama field
+                        hadir: parseRecordData(item.detail || item.hadir) // Use parsed data
                     }));
 
-                    // Gabungkan dengan data lokal (Cloud menang jika tanggal sama)
-                    // Hapus data lokal yang tanggal & kategorinya ada di cloud
                     allRecords = allRecords.filter(local => 
                         !cloudRecords.some(cloud => 
                             cloud.kategori === local.kategori && cloud.tanggal == local.tanggal
                         )
                     );
                     
-                    // Masukkan data cloud
                     allRecords = [...allRecords, ...cloudRecords];
-                    saveAllRecords(); // Simpan ke local storage
+                    saveAllRecords(); 
 
-                    // Update form state (Inputan)
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
                         const cat = item.kategori;
@@ -376,14 +390,12 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    // PERBAIKAN: Gunakan parseRecordData saat mapping agar format konsisten
-                    // Dan pastikan tidak menimpa dengan array kosong jika fetch gagal (sudah dihandle di blok catch)
                     allRecords = result.data.map(item => ({
                         nama: item.nama, 
                         kelas: item.kelas, 
                         kategori: item.kategori, 
                         tanggal: item.tanggal, 
-                        hadir: item.detail || item.hadir // Simpan raw, nanti diparse saat render
+                        hadir: parseRecordData(item.detail || item.hadir) // Use parsed data
                     }));
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
@@ -805,6 +817,25 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         
+        // PERBAIKAN: Fungsi parsing yang lebih kuat untuk menangani JSON ganda
+        function parseRecordData(d) { 
+            if (!d) return null;
+            if (typeof d === 'object') return d;
+            
+            try { 
+                // Coba parse pertama
+                let parsed = JSON.parse(d);
+                // Jika hasil parse masih string, berarti kena double stringify, parse lagi
+                if (typeof parsed === 'string') {
+                    return JSON.parse(parsed);
+                }
+                return parsed;
+            } catch (e) { 
+                // Jika gagal parse (berarti string biasa), kembalikan as-is
+                return d; 
+            } 
+        }
+        
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             
@@ -813,7 +844,17 @@
             if (k === 'Shalat Fardu') {
                 if (typeof d !== 'object') return d;
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
+                // Handle case-insensitive keys just in case
+                const keys = Object.keys(d);
+                const entries = orderedKeys.map(key => {
+                     // Find matching key (e.g. 'subuh' matches 'Subuh')
+                     const match = keys.find(k => k.toLowerCase() === key.toLowerCase());
+                     if (match && d[match]) {
+                         return `${key}: <span class="font-bold text-emerald-600">${d[match]}</span>`;
+                     }
+                     return null;
+                }).filter(Boolean);
+
                 return entries.length ? entries.join(' | ') : '-';
             } else if (k === 'Tarawih') {
                 if (typeof d !== 'object') return `Status: <b>${d}</b>`;
