@@ -10,15 +10,8 @@
     window.onerror = function(msg, url, line, col, error) {
         const app = document.getElementById('app');
         if (app) {
-            app.innerHTML = `
-                <div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">
-                    <h3>Terjadi Kesalahan Aplikasi</h3>
-                    <p>${msg}</p>
-                    <button onclick="localStorage.clear(); location.reload();" style="margin-top:10px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Reset & Reload Aplikasi
-                    </button>
-                </div>
-            `;
+            // Log ke console saja agar tidak mengganggu UI user
+            console.error("App Error:", msg, error);
         }
         return false;
     };
@@ -842,20 +835,18 @@
             if (!d) return '-'; 
             
             if (k === 'Shalat Fardu') {
-                if (typeof d !== 'object') return d;
-                const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                // Handle case-insensitive keys just in case
-                const keys = Object.keys(d);
-                const entries = orderedKeys.map(key => {
-                     // Find matching key (e.g. 'subuh' matches 'Subuh')
-                     const match = keys.find(k => k.toLowerCase() === key.toLowerCase());
-                     if (match && d[match]) {
-                         return `${key}: <span class="font-bold text-emerald-600">${d[match]}</span>`;
-                     }
-                     return null;
-                }).filter(Boolean);
-
-                return entries.length ? entries.join(' | ') : '-';
+                if (typeof d === 'string') return `<span class="font-bold text-emerald-600">${d}</span>`; // Handle string case
+                if (typeof d === 'object') {
+                   // Prioritize standard keys for ordering
+                   const standardKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+                   // We filter standard keys that exist in d
+                   const entries = standardKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
+                   // If no standard keys found, try mapping all keys
+                   if (entries.length === 0) {
+                      return Object.keys(d).filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`).join(' | ');
+                   }
+                   return entries.length ? entries.join(' | ') : '-';
+                }
             } else if (k === 'Tarawih') {
                 if (typeof d !== 'object') return `Status: <b>${d}</b>`;
                 return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
