@@ -49,89 +49,1763 @@
      * =========================================================================
      * Anda bisa mengganti object ini dengan logika aplikasi yang berbeda.
      */
-    const STUDENT_APP_MODULE = {
-        categories: ['Shalat Fardu', 'Tarawih', 'Puasa', 'Tadarus', 'Ceramah'],
-
-        // Inisialisasi variabel data lokal aplikasi
-        initLocalState: function() {
-            window.shalatData = {}; window.tarawihData = {}; window.puasaData = {}; 
-            window.tadarusData = {}; window.ceramahData = {};
-            for (let i = 1; i <= 30; i++) {
-                window.shalatData[i] = { 'Subuh': null, 'Dzuhur': null, 'Ashar': null, 'Maghrib': null, 'Isya': null };
-                window.tarawihData[i] = { status: null, tempat: null };
-                window.puasaData[i] = null;
-                window.tadarusData[i] = { pilihan: null, surat: '', ayat: '' };
-                window.ceramahData[i] = { penceramah: '', tempat: '', ringkasan: '' };
-            }
-        },
-
-        // Kode UI Formulir (Input)
-        renderForm: function(container, tab) {
-            const days = Array.from({length: 30}, (_, i) => i + 1);
-            if (tab === 'Shalat Fardu') {
-                container.innerHTML = `<div class="space-y-8">${days.map(t => `
-                    <div class="p-5 border rounded-2xl bg-white shadow-sm border-l-8 border-emerald-500">
-                        <h3 class="font-black text-emerald-800 mb-4 flex justify-between">📅 Hari ke-${t} <span class="text-[10px] font-normal text-slate-400 italic">Shalat Wajib</span></h3>
-                        <div class="space-y-4">
-                            ${SYSTEM_CONFIG.PRAYER_ORDER.map(w => `
-                                <div class="flex flex-col md:flex-row md:items-center gap-3 pb-3 border-b border-gray-100 last:border-0">
-                                    <div class="w-24 font-bold text-gray-600">⏰ ${w}</div>
-                                    <div class="flex flex-wrap gap-2 flex-1">
-                                        ${['berjamaah','munfarid','haid','tidak shalat'].map(s => `
-                                            <button onclick="updateShalat(${t}, '${w}', '${s}')" class="px-3 py-1.5 text-[10px] rounded-full border-2 transition-all font-semibold ${window.shalatData[t]?.[w] === s ? 'sh-btn-active' : 'bg-white text-gray-500 border-gray-100'}">${s}</button>
-                                        `).join('')}
-                                    </div>
-                                    <button onclick="handleSavePrayer(${t}, '${w}')" class="px-3 py-1.5 text-[10px] rounded-lg bg-blue-600 text-white font-bold shadow hover:bg-blue-700 active:scale-95">💾 Simpan ${w}</button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>`).join('')}</div>`;
-            } else if (tab === 'Tarawih') {
-                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-indigo-500 shadow-sm"><h3 class="font-black text-indigo-900 mb-4">📅 Hari ke-${t}</h3><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">STATUS</p><div class="flex flex-wrap gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button onclick="updateTarawih(${t}, 'status', '${s}')" class="px-3 py-2 text-xs border-2 rounded-xl font-bold ${window.tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}">${s}</button>`).join('')}</div></div><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">TEMPAT</p><div class="flex gap-2">${['mesjid','rumah'].map(tmp => `<button onclick="updateTarawih(${t}, 'tempat', '${tmp}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}">${tmp}</button>`).join('')}</div></div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
-            } else if (tab === 'Puasa') {
-                container.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-orange-500 shadow-sm"><h3 class="font-black text-orange-900 mb-4">📅 Hari ke-${t}</h3><div class="flex flex-wrap gap-2 mb-4">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button onclick="updatePuasa(${t}, '${s}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-gray-100'}">${s}</button>`).join('')}</div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-orange-500 text-white rounded-xl font-black shadow-lg">💾 SIMPAN PUASA</button></div>`).join('')}</div>`;
-            } else if (tab === 'Tadarus') {
-                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button onclick="updateTadarus(${t}, 'pilihan', '${m}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}">${m === 'sendiri' ? 'Sendiri' : 'Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><input type="text" oninput="updateTadarus(${t}, 'surat', this.value)" value="${window.tadarusData[t]?.surat || ''}" placeholder="Nama Surat" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><input type="text" oninput="updateTadarus(${t}, 'ayat', this.value)" value="${window.tadarusData[t]?.ayat || ''}" placeholder="Ayat" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"></div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
-            } else if (tab === 'Ceramah') {
-                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-3"><input type="text" oninput="updateCeramah(${t}, 'penceramah', this.value)" value="${window.ceramahData[t]?.penceramah || ''}" placeholder="Nama Penceramah" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><input type="text" oninput="updateCeramah(${t}, 'tempat', this.value)" value="${window.ceramahData[t]?.tempat || ''}" placeholder="Tempat / Media" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><textarea oninput="updateCeramah(${t}, 'ringkasan', this.value)" placeholder="Ringkasan isi ceramah..." class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm h-24">${window.ceramahData[t]?.ringkasan || ''}</textarea></div><button onclick="saveModuleData(${t})" class="w-full mt-4 py-3 bg-rose-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
-            }
-        },
-
-        // Kode Sinkronisasi data ke Variabel Lokal
-        syncFromServer: function(record) {
-            let d = record.detail;
-            if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
-            if (record.kategori === 'Shalat Fardu') window.shalatData[record.tanggal] = d;
-            else if (record.kategori === 'Tarawih') window.tarawihData[record.tanggal] = d;
-            else if (record.kategori === 'Puasa') window.puasaData[record.tanggal] = d.status || d;
-            else if (record.kategori === 'Tadarus') window.tadarusData[record.tanggal] = d;
-            else if (record.kategori === 'Ceramah') window.ceramahData[record.tanggal] = d;
-        },
-
-        // Kode Tampilan Data di Rekap/Panel Guru
-        renderDetailDisplay: function(cat, data) {
-            let d = data;
-            if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
-            if (!d) return '-';
-            if (cat === 'Shalat Fardu') {
-                return `<div class="flex flex-wrap gap-1">${SYSTEM_CONFIG.PRAYER_ORDER.map(w => {
-                    const s = d[w] || '-';
-                    let cls = 'bg-slate-50 text-slate-400';
-                    if (s === 'berjamaah') cls = 'bg-emerald-50 text-emerald-700 border-emerald-100';
-                    else if (s === 'munfarid') cls = 'bg-blue-50 text-blue-700 border-blue-100';
-                    else if (s === 'haid') cls = 'bg-purple-50 text-purple-700 border-purple-100';
-                    else if (s === 'tidak shalat') cls = 'bg-rose-50 text-rose-700 border-rose-100';
-                    return `<div class="flex-1 min-w-[70px] ${cls} p-1.5 rounded-lg border text-center text-[9px] font-bold shadow-sm"><span class="block text-[7px] uppercase mb-0.5 opacity-60">${w}</span>${s}</div>`;
-                }).join('')}</div>`;
-            }
-            if (cat === 'Tarawih') return `<div class="text-xs">Status: <b>${d.status || '-'}</b> | Lokasi: <b>${d.tempat || '-'}</b></div>`;
-            if (cat === 'Puasa') return `<b class="text-xs uppercase text-orange-600">${typeof d === 'string' ? d : d.status}</b>`;
-            if (cat === 'Tadarus') return `<div class="text-xs"><b>QS. ${d.surat || '-'}</b> (Ayat: ${d.ayat || '-'}), Metode: ${d.pilihan || '-'}</div>`;
-            if (cat === 'Ceramah') return `<div class="text-xs"><p class="font-bold">${d.penceramah || '-'}</p><p class="italic text-slate-500">"${d.ringkasan || '-'}"</p></div>`;
-            return JSON.stringify(d);
+    <!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amalan Ramadhan Siswa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mock SDKs for standalone environment -->
+  <script>
+    // Error Handler Global
+    window.onerror = function(msg, url, line, col, error) {
+        const app = document.getElementById('app');
+        if (app) {
+            app.innerHTML = `
+                <div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">
+                    <h3>Terjadi Kesalahan Aplikasi</h3>
+                    <p>${msg}</p>
+                    <button onclick="localStorage.clear(); location.reload();" style="margin-top:10px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Reset & Reload Aplikasi
+                    </button>
+                </div>
+            `;
         }
+        return false;
     };
 
+    window.elementSdk = {
+        config: {},
+        init: (options) => {
+            if (options.onConfigChange) options.onConfigChange(options.defaultConfig);
+            console.log('Element SDK Mock Initialized');
+        },
+        setConfig: (conf) => { Object.assign(window.elementSdk.config, conf); }
+    };
+    window.dataSdk = {
+        init: () => Promise.resolve({ isOk: true }),
+        create: (data) => {
+            console.log('Data saved via Mock SDK:', data);
+            return Promise.resolve({ isOk: true });
+        }
+    };
+  </script>
+  <style>
+        body {
+            box-sizing: border-box;
+        }
+        .toast {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            border-bottom: 3px solid;
+        }
+        /* Custom Modal Animation */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        .modal-exit {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .modal-exit-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        /* Scrollbar styling for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555; 
+        }
+    </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full bg-gray-50">
+  <div id="app" class="w-full h-full"></div>
+  <script>
+        // URL Updated with User's Deployment Link
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxoBHsUtdFYkl_nUGeFJWA6ONoLjxGGivJEUx56SYSxBFVrPeeRtNCawv4fID3qCxX8/exec';
+        
+        const defaultConfig = {
+            app_title: "Amalan Ramadhan Siswa",
+            welcome_message: "Selamat datang di aplikasi Amalan Ramadhan",
+            background_color: "#10b981", // Emerald 500
+            surface_color: "#ffffff",
+            text_color: "#1f2937", // Gray 800
+            primary_action_color: "#059669", // Emerald 600
+            secondary_action_color: "#6b7280", // Gray 500
+            font_family: "Arial",
+            font_size: 16
+        };
+
+        let currentUser = null;
+        let currentTab = 'Shalat Fardu';
+        let allRecords = [];
+        
+        const categories = ['Shalat Fardu', 'Tarawih', 'Puasa', 'Tadarus', 'Ceramah'];
+
+        // --- STATE MANAGEMENT OBJECTS ---
+        let shalatData = {};
+        let tarawihData = {};
+        let puasaData = {};
+        let tadarusData = {};
+        let ceramahData = {};
+
+        // Inisialisasi Data Kosong
+        function initDefaultData() {
+            for (let i = 1; i <= 30; i++) {
+                // Gunakan object assign agar tidak menimpa referensi jika ada binding
+                shalatData[i] = { 'Subuh': null, 'Dzuhur': null, 'Ashar': null, 'Maghrib': null, 'Isya': null };
+                tarawihData[i] = { status: null, tempat: null };
+                puasaData[i] = null;
+                tadarusData[i] = { pilihan: null, surat: '', ayat: '', ustadz: '' };
+                ceramahData[i] = { penceramah: '', tempat: '', media: '', ringkasan: '' };
+            }
+        }
+        initDefaultData();
+
+        // --- PERSISTENCE FUNCTIONS ---
+        function safeGetStorage(key) {
+            try {
+                return localStorage.getItem(key);
+            } catch (e) {
+                console.warn('LocalStorage access denied/failed', e);
+                return null;
+            }
+        }
+
+        function safeSetStorage(key, value) {
+            try {
+                localStorage.setItem(key, value);
+            } catch (e) {
+                console.warn('LocalStorage save failed', e);
+            }
+        }
+
+        function safeRemoveStorage(key) {
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                console.warn('LocalStorage remove failed', e);
+            }
+        }
+        
+        function loadAllRecords() {
+            const saved = safeGetStorage('ramadhanAllRecords');
+            if (saved) {
+                try {
+                    allRecords = JSON.parse(saved);
+                } catch(e) {
+                    console.error("Gagal memuat record lama");
+                }
+            }
+        }
+
+        function saveAllRecords() {
+            safeSetStorage('ramadhanAllRecords', JSON.stringify(allRecords));
+        }
+
+        function getUserStateKey() {
+            if (!currentUser) return null;
+            return `ramadhanState_${currentUser.nama_lengkap.replace(/\s+/g, '_')}_${currentUser.kelas}`;
+        }
+
+        function loadUserState() {
+            const key = getUserStateKey();
+            if (!key) return;
+
+            const savedState = safeGetStorage(key);
+            if (savedState) {
+                try {
+                    const state = JSON.parse(savedState);
+                    if (state.shalatData) shalatData = state.shalatData;
+                    if (state.tarawihData) tarawihData = state.tarawihData;
+                    if (state.puasaData) puasaData = state.puasaData;
+                    if (state.tadarusData) tadarusData = state.tadarusData;
+                    if (state.ceramahData) ceramahData = state.ceramahData;
+                    
+                    window._tarawihData = tarawihData;
+                    window._puasaData = puasaData;
+                    window._tadarusData = tadarusData;
+                    window._ceramahData = ceramahData;
+                } catch (e) {
+                    console.error("Gagal memuat state user", e);
+                    initDefaultData();
+                }
+            } else {
+                initDefaultData();
+            }
+        }
+
+        function saveUserState() {
+            const key = getUserStateKey();
+            if (!key || (currentUser.nama_lengkap === '*' && currentUser.password === '*')) return;
+
+            const state = {
+                shalatData,
+                tarawihData,
+                puasaData,
+                tadarusData,
+                ceramahData
+            };
+            safeSetStorage(key, JSON.stringify(state));
+        }
+
+        // --- FUNGSI SINKRONISASI ---
+        async function syncUserFromCloud() {
+            if (!currentUser || (currentUser.nama_lengkap === '*' && currentUser.password === '*')) return;
+
+            const loadingToast = document.createElement('div');
+            loadingToast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-blue-600 flex items-center gap-2`;
+            loadingToast.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Sinkronisasi data server...
+            `;
+            document.body.appendChild(loadingToast);
+
+            try {
+                const url = new URL(GOOGLE_SCRIPT_URL);
+                url.searchParams.append('action', 'read');
+                url.searchParams.append('nama', currentUser.nama_lengkap);
+                url.searchParams.append('kelas', currentUser.kelas);
+                url.searchParams.append('t', new Date().getTime()); // Anti-cache
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.status === 'success' && Array.isArray(result.data)) {
+                    let updatedCount = 0;
+                    
+                    result.data.forEach(item => {
+                        const tgl = item.tanggal;
+                        const cat = item.kategori;
+                        let detail = item.detail;
+                        
+                        if (typeof detail === 'string') {
+                            try { detail = JSON.parse(detail); } catch(e) {}
+                        }
+
+                        if (tgl && cat && detail) {
+                            if (cat === 'Shalat Fardu') {
+                                shalatData[tgl] = { ...shalatData[tgl], ...detail };
+                                updatedCount++;
+                            } else if (cat === 'Tarawih') {
+                                tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
+                                updatedCount++;
+                            } else if (cat === 'Puasa') {
+                                puasaData[tgl] = detail.status || detail;
+                                updatedCount++;
+                            } else if (cat === 'Tadarus') {
+                                tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
+                                updatedCount++;
+                            } else if (cat === 'Ceramah') {
+                                ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
+                                updatedCount++;
+                            }
+                        }
+                    });
+
+                    if (updatedCount > 0) {
+                        saveUserState();
+                        renderContentArea();
+                        loadingToast.remove();
+                        showToast(`Berhasil memulihkan ${updatedCount} data dari server!`, true);
+                    } else {
+                        loadingToast.remove();
+                    }
+                } else {
+                    loadingToast.remove();
+                }
+            } catch (e) {
+                console.error("Gagal sync:", e);
+                loadingToast.remove();
+            }
+        } 
+
+        // --- FUNGSI SINKRONISASI CLOUD (ADMIN) ---
+        async function fetchAllDataForAdmin() {
+            const loadingToast = document.createElement('div');
+            loadingToast.id = 'adminLoadingToast';
+            loadingToast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600 flex items-center gap-2`;
+            loadingToast.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Mengambil data seluruh siswa dari Spreadsheet...
+            `;
+            document.body.appendChild(loadingToast);
+
+            try {
+                const url = new URL(GOOGLE_SCRIPT_URL);
+                url.searchParams.append('action', 'readAll');
+                url.searchParams.append('t', new Date().getTime()); // Anti-cache
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.status === 'success' && Array.isArray(result.data)) {
+                    allRecords = result.data.map(item => {
+                        let detailData = item.detail;
+                        return {
+                            nama: item.nama,
+                            kelas: item.kelas,
+                            kategori: item.kategori,
+                            tanggal: item.tanggal,
+                            hadir: typeof detailData === 'string' ? detailData : JSON.stringify(detailData)
+                        };
+                    });
+                    
+                    saveAllRecords();
+                    
+                    // Refresh tampilan jika sedang di halaman admin
+                    if (document.getElementById('studentListContainer')) {
+                        showLaporanPage(); 
+                    }
+
+                    showToast(`Data berhasil diperbarui: ${allRecords.length} catatan.`, true);
+                } else {
+                    console.log("Fetch data: Data kosong atau format respon tidak sesuai (silent)");
+                }
+            } catch (e) {
+                console.error("Gagal fetch all data:", e);
+                showToast("Gagal terhubung ke database. Cek internet atau script.", false);
+            } finally {
+                const toast = document.getElementById('adminLoadingToast');
+                if (toast) toast.remove();
+            }
+        }
+
+        // -----------------------------
+
+        function showToast(message, isSuccess = true) {
+            const toast = document.createElement('div');
+            toast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${isSuccess ? 'bg-green-600' : 'bg-red-600'}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function showConfirmDialog(message, onConfirm) {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4 transition-opacity duration-200';
+            overlay.style.opacity = '0';
+            
+            const modal = document.createElement('div');
+            modal.className = 'bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full transform transition-all duration-200 scale-95';
+            
+            modal.innerHTML = `
+                <div class="text-center">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg leading-6 font-bold text-gray-900 mb-2">Konfirmasi Keluar</h3>
+                    <p class="text-sm text-gray-500 mb-6">${message}</p>
+                    <div class="flex gap-3 justify-center">
+                        <button id="modalCancelBtn" class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors">
+                            Batal
+                        </button>
+                        <button id="modalConfirmBtn" class="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 font-medium transition-colors shadow-md bg-red-600 hover:bg-red-700">
+                            Ya, Keluar
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '1';
+                modal.classList.remove('scale-95');
+                modal.classList.add('scale-100');
+            });
+
+            const close = () => {
+                overlay.style.opacity = '0';
+                modal.classList.remove('scale-100');
+                modal.classList.add('scale-95');
+                setTimeout(() => overlay.remove(), 200);
+            };
+
+            document.getElementById('modalCancelBtn').onclick = close;
+            document.getElementById('modalConfirmBtn').onclick = () => {
+                close();
+                onConfirm();
+            };
+        }
+
+        function showLoginPage() {
+            const config = window.elementSdk?.config || defaultConfig;
+            const customFont = config.font_family || defaultConfig.font_family;
+            const baseFontStack = 'Arial, sans-serif';
+            const baseSize = config.font_size || defaultConfig.font_size;
+            
+            const lastNama = safeGetStorage('last_nama') || '';
+            const lastKelas = safeGetStorage('last_kelas') || '';
+            
+            // Generate class options 7A-7J, 8A-8J, 9A-9J
+            // Hapus atribut 'disabled' agar user bisa memilih kembali opsi "Pilih Kelas"
+            let classOptions = `<option value="" ${!lastKelas ? 'selected' : ''}>Pilih Kelas</option>`;
+            const grades = ['7', '8', '9'];
+            const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+            
+            grades.forEach(grade => {
+                classOptions += `<optgroup label="Kelas ${grade}">`;
+                sections.forEach(section => {
+                    const className = `${grade}${section}`;
+                    const isSelected = (className === lastKelas) ? 'selected' : '';
+                    classOptions += `<option value="${className}" ${isSelected}>${className}</option>`;
+                });
+                classOptions += `</optgroup>`;
+            });
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4" style="background: ${config.background_color || defaultConfig.background_color};">
+                    <div class="w-full max-w-md rounded-xl shadow-2xl p-8" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                        <h1 class="text-center font-bold mb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 2}px; color: ${config.text_color || defaultConfig.text_color};">${config.app_title || defaultConfig.app_title}</h1>
+                        <p class="text-center mb-8" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px; color: ${config.text_color || defaultConfig.text_color};">${config.welcome_message || defaultConfig.welcome_message}</p>
+                        
+                        <form id="loginForm" class="space-y-4">
+                            <!-- NAMA DIPINDAHKAN KE ATAS KELAS -->
+                            <div>
+                                <label for="nama" class="block mb-2 font-medium" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};">Nama Lengkap Siswa</label>
+                                <input type="text" id="nama" value="${lastNama}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px;">
+                            </div>
+
+                            <div>
+                                <label for="kelas" class="block mb-2 font-medium" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};">Kelas</label>
+                                <select id="kelas" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px;">
+                                    ${classOptions}
+                                </select>
+                            </div>
+                            
+                            <!-- PASSWORD DIHAPUS DARI FORM LOGIN -->
+                            
+                            <button type="submit" id="loginBtn" class="w-full py-3 rounded-lg text-white font-semibold transition-all hover:opacity-90 shadow-md" style="background: ${config.primary_action_color || defaultConfig.primary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px;">
+                                Masuk
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            
+            const nama = document.getElementById('nama').value.trim();
+            const kelas = document.getElementById('kelas').value.trim();
+            
+            // Password tidak lagi diambil dari form
+            // Logika baru: jika nama = *, anggap admin
+            
+            const isAdmin = nama === '*';
+            
+            if (!isAdmin) {
+                if (!nama || !kelas) {
+                    showToast("Mohon lengkapi Nama dan Kelas", false);
+                    return;
+                }
+            } 
+            
+            const loginBtn = document.getElementById('loginBtn');
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Memproses...';
+            
+            if (!isAdmin) {
+                safeSetStorage('last_nama', nama);
+                safeSetStorage('last_kelas', kelas);
+            }
+
+            currentUser = {
+                nama_lengkap: nama,
+                kelas: isAdmin ? '*' : kelas,
+                password: isAdmin ? '*' : '' // Set otomatis
+            };
+            
+            safeSetStorage('ramadhanUser', JSON.stringify(currentUser));
+            
+            loadUserState();
+            
+            if (!isAdmin) {
+                syncUserFromCloud();
+            }
+            
+            showAmalanPage();
+        }
+
+        function showAmalanPage() {
+            if (!currentUser) return;
+
+            const isAdmin = currentUser.nama_lengkap === '*' && currentUser.password === '*';
+
+            if (isAdmin) {
+                showLaporanPage();
+                fetchAllDataForAdmin();
+                return;
+            }
+            
+            const config = window.elementSdk?.config || defaultConfig;
+            const customFont = config.font_family || defaultConfig.font_family;
+            const baseFontStack = 'Arial, sans-serif';
+            const baseSize = config.font_size || defaultConfig.font_size;
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="w-full h-full overflow-auto" style="background: ${config.background_color || defaultConfig.background_color};">
+                    <div class="max-w-4xl mx-auto p-4 md:p-6 pb-24">
+                        <div class="rounded-xl shadow-lg p-6 mb-6 transform transition hover:scale-[1.01]" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h1 class="font-bold mb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.8}px; color: ${config.text_color || defaultConfig.text_color};">${config.app_title || defaultConfig.app_title}</h1>
+                            <div class="mb-4 bg-gray-50 p-3 rounded-lg">
+                                <p style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};"><strong>👤 Nama:</strong> ${currentUser.nama_lengkap}</p>
+                                <p style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};"><strong>🏫 Kelas:</strong> ${currentUser.kelas}</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 justify-between">
+                                <div class="flex gap-2">
+                                    <button id="rekapBtn" class="px-4 py-2 rounded-lg text-white transition-all hover:opacity-90 shadow-sm flex items-center gap-2" style="background: ${config.primary_action_color || defaultConfig.primary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                        <span>📊</span> Rekap Saya
+                                    </button>
+                                </div>
+                                <button id="logoutBtn" class="px-4 py-2 rounded-lg text-white transition-all hover:opacity-90 shadow-sm bg-red-500 hover:bg-red-600" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                    Keluar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="rounded-xl shadow-lg mb-6 overflow-hidden sticky top-0 z-40 bg-white" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <div class="flex overflow-x-auto no-scrollbar scroll-smooth">
+                                ${categories.map(cat => `
+                                    <button class="tab-button flex-1 px-4 py-3 font-semibold whitespace-nowrap hover:bg-gray-50 ${currentTab === cat ? 'active' : ''}" 
+                                            data-tab="${cat}"
+                                            style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px; color: ${currentTab === cat ? config.primary_action_color : config.text_color}; border-color: ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                        ${cat}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div class="rounded-xl shadow-lg p-6 min-h-[400px]" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h2 class="font-bold mb-4 flex items-center gap-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+                                <span>📝</span> ${currentTab}
+                            </h2>
+                            
+                            <div id="contentArea" class="mb-6"></div>
+                            
+                            <button id="simpanDataBtn" class="w-full py-4 rounded-xl text-white font-bold shadow-lg transition-all hover:opacity-90 transform hover:-translate-y-1" style="background: ${config.primary_action_color || defaultConfig.primary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px;">
+                                Simpan Semua Data ${currentTab}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', handleTabChange);
+            });
+            
+            const simpanDataBtn = document.getElementById('simpanDataBtn');
+            if (simpanDataBtn) {
+                simpanDataBtn.addEventListener('click', handleSimpanData);
+            }
+            
+            const rekapBtn = document.getElementById('rekapBtn');
+            if (rekapBtn) {
+                rekapBtn.addEventListener('click', showRekapPage);
+            }
+            
+            renderContentArea();
+            
+            document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+        }
+
+        window._tarawihData = tarawihData;
+        window._puasaData = puasaData;
+        window._tadarusData = tadarusData;
+        window._ceramahData = ceramahData;
+
+        function renderContentArea() {
+            const config = window.elementSdk?.config || defaultConfig;
+            const customFont = config.font_family || defaultConfig.font_family;
+            const baseFontStack = 'Arial, sans-serif';
+            const baseSize = config.font_size || defaultConfig.font_size;
+            const contentArea = document.getElementById('contentArea');
+            
+            if (currentTab === 'Shalat Fardu') {
+                const waktuShalat = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+                const statusOptions = ['berjamaah', 'munfarid', 'haid', 'tidak shalat'];
+                
+                contentArea.innerHTML = `
+                    <div class="space-y-6">
+                        ${Array.from({length: 30}, (_, i) => i + 1).map(tanggal => `
+                            <div class="border rounded-xl p-5 mb-4 shadow-sm hover:shadow-md transition bg-white" style="border-left: 5px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                <div class="flex justify-between items-center mb-4 pb-2 border-b">
+                                    <h2 class="font-bold" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                        📅 Ramadhan Hari ke-${tanggal}
+                                    </h2>
+                                    <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">Shalat Wajib</span>
+                                </div>
+                                <div class="space-y-4 mb-4">
+                                    ${waktuShalat.map(waktu => `
+                                        <div class="flex flex-col md:flex-row md:items-center gap-3 p-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                                            <div class="w-24 font-semibold flex items-center gap-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};">
+                                                <span>⏰</span> ${waktu}
+                                            </div>
+                                            <div class="flex flex-wrap gap-2 flex-1 items-center">
+                                                ${statusOptions.map(status => `
+                                                    <button 
+                                                        class="shalat-btn px-3 py-1.5 rounded-full text-sm transition-all border ${shalatData[tanggal]?.[waktu] === status ? 'shadow-md transform scale-105 font-bold' : 'opacity-70 hover:opacity-100'}" 
+                                                        data-tanggal="${tanggal}" 
+                                                        data-waktu="${waktu}" 
+                                                        data-status="${status}"
+                                                        style="${shalatData[tanggal]?.[waktu] === status ? 
+                                                            `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white; border-color: ${config.primary_action_color || defaultConfig.primary_action_color};` : 
+                                                            `color: ${config.text_color || defaultConfig.text_color}; border-color: #e5e7eb; background: white;`}">
+                                                        ${status.charAt(0).toUpperCase() + status.slice(1)}
+                                                    </button>
+                                                `).join('')}
+                                                <button 
+                                                    class="simpan-waktu-btn ml-auto md:ml-2 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow transition-all hover:opacity-90 flex items-center gap-1" 
+                                                    data-tanggal="${tanggal}"
+                                                    data-waktu="${waktu}"
+                                                    title="Simpan data ${waktu}"
+                                                    style="background: ${config.secondary_action_color || defaultConfig.secondary_action_color};">
+                                                    💾 Simpan
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                document.querySelectorAll('.shalat-btn').forEach(btn => {
+                    btn.addEventListener('click', handleShalatStatus);
+                });
+                document.querySelectorAll('.simpan-waktu-btn').forEach(btn => {
+                    btn.addEventListener('click', handleSimpanPerWaktu);
+                });
+                
+            } else if (currentTab === 'Tarawih') {
+                const statusOptions = ['berjamaah', 'munfarid', 'tidak mengerjakan', 'sakit', 'haid'];
+                const tempatOptions = ['mesjid', 'rumah'];
+                
+                contentArea.innerHTML = `
+                    <div class="space-y-4">
+                        ${Array.from({length: 30}, (_, i) => i + 1).map(tanggal => `
+                            <div class="border rounded-xl p-5 shadow-sm hover:shadow-md transition bg-white" style="border-left: 5px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                <h3 class="font-bold mb-4 border-b pb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                    📅 Ramadhan Hari ke-${tanggal}
+                                </h3>
+                                
+                                <div class="mb-4">
+                                    <label class="block mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">Status Pelaksanaan</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${statusOptions.map(status => `
+                                            <button 
+                                                class="tarawih-status-btn px-4 py-2 rounded-lg transition-all border ${tarawihData[tanggal]?.status === status ? 'shadow-md font-bold' : 'opacity-80 hover:opacity-100'}" 
+                                                data-tanggal="${tanggal}" 
+                                                data-status="${status}"
+                                                style="${tarawihData[tanggal]?.status === status ? 
+                                                    `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white; border-color: transparent;` : 
+                                                    `color: ${config.text_color || defaultConfig.text_color}; border-color: #d1d5db; background: white;`}">
+                                                ${status.charAt(0).toUpperCase() + status.slice(1)}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">Tempat Pelaksanaan</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${tempatOptions.map(tempat => `
+                                            <button 
+                                                class="tarawih-tempat-btn px-4 py-2 rounded-lg transition-all border ${tarawihData[tanggal]?.tempat === tempat ? 'shadow-md font-bold' : 'opacity-80 hover:opacity-100'}" 
+                                                data-tanggal="${tanggal}" 
+                                                data-tempat="${tempat}"
+                                                style="${tarawihData[tanggal]?.tempat === tempat ? 
+                                                    `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white; border-color: transparent;` : 
+                                                    `color: ${config.text_color || defaultConfig.text_color}; border-color: #d1d5db; background: white;`}">
+                                                ${tempat.charAt(0).toUpperCase() + tempat.slice(1)}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                
+                                <button 
+                                    class="simpan-tanggal-btn w-full py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90" 
+                                    data-tanggal="${tanggal}"
+                                    style="background: ${config.secondary_action_color || defaultConfig.secondary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                    💾 Simpan Harian (Hari ke-${tanggal})
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                document.querySelectorAll('.tarawih-status-btn').forEach(btn => {
+                    btn.addEventListener('click', handleTarawihStatus);
+                });
+                document.querySelectorAll('.tarawih-tempat-btn').forEach(btn => {
+                    btn.addEventListener('click', handleTarawihTempat);
+                });
+                document.querySelectorAll('.simpan-tanggal-btn').forEach(btn => {
+                    btn.addEventListener('click', handleSimpanPerTanggal);
+                });
+                
+            } else if (currentTab === 'Tadarus') {
+                contentArea.innerHTML = `
+                    <div class="space-y-4">
+                        ${Array.from({length: 30}, (_, i) => i + 1).map(tanggal => `
+                            <div class="border rounded-xl p-5 shadow-sm hover:shadow-md transition bg-white" style="border-left: 5px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                <h3 class="font-bold mb-4 border-b pb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                    📅 Ramadhan Hari ke-${tanggal}
+                                </h3>
+                                
+                                <div class="mb-4">
+                                    <label class="block mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">Metode</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button 
+                                            class="tadarus-pilihan-btn px-4 py-2 rounded-lg transition-all border ${tadarusData[tanggal]?.pilihan === 'sendiri' ? 'shadow-md font-bold' : ''}" 
+                                            data-tanggal="${tanggal}" 
+                                            data-pilihan="sendiri"
+                                            style="${tadarusData[tanggal]?.pilihan === 'sendiri' ? 
+                                                `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white;` : 
+                                                `color: ${config.text_color || defaultConfig.text_color}; border-color: #d1d5db; background: white;`}">
+                                            Sendiri
+                                        </button>
+                                        <button 
+                                            class="tadarus-pilihan-btn px-4 py-2 rounded-lg transition-all border ${tadarusData[tanggal]?.pilihan === 'ustadz' ? 'shadow-md font-bold' : ''}" 
+                                            data-tanggal="${tanggal}" 
+                                            data-pilihan="ustadz"
+                                            style="${tadarusData[tanggal]?.pilihan === 'ustadz' ? 
+                                                `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white;` : 
+                                                `color: ${config.text_color || defaultConfig.text_color}; border-color: #d1d5db; background: white;`}">
+                                            Simakan (Ustadz)
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Nama Surat</label>
+                                        <input 
+                                            type="text" 
+                                            class="tadarus-surat w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Contoh: Al-Baqarah"
+                                            value="${tadarusData[tanggal]?.surat || ''}">
+                                    </div>
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Ayat</label>
+                                        <input 
+                                            type="text" 
+                                            class="tadarus-ayat w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Contoh: 1-10"
+                                            value="${tadarusData[tanggal]?.ayat || ''}">
+                                    </div>
+                                    <div class="md:col-span-2 ${tadarusData[tanggal]?.pilihan === 'ustadz' ? '' : 'hidden'}">
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Nama Ustadz</label>
+                                        <input 
+                                            type="text" 
+                                            class="tadarus-ustadz w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Nama ustadz (opsional)"
+                                            value="${tadarusData[tanggal]?.ustadz || ''}">
+                                    </div>
+                                </div>
+                                <button 
+                                    class="simpan-tanggal-btn w-full py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90" 
+                                    data-tanggal="${tanggal}"
+                                    style="background: ${config.secondary_action_color || defaultConfig.secondary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                    💾 Simpan Harian (Hari ke-${tanggal})
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                document.querySelectorAll('.tadarus-pilihan-btn').forEach(btn => {
+                    btn.addEventListener('click', handleTadarusPilihan);
+                });
+                document.querySelectorAll('.tadarus-surat').forEach(input => {
+                    input.addEventListener('input', handleTadarusInput);
+                });
+                document.querySelectorAll('.tadarus-ayat').forEach(input => {
+                    input.addEventListener('input', handleTadarusInput);
+                });
+                document.querySelectorAll('.tadarus-ustadz').forEach(input => {
+                    input.addEventListener('input', handleTadarusInput);
+                });
+                document.querySelectorAll('.simpan-tanggal-btn').forEach(btn => {
+                    btn.addEventListener('click', handleSimpanPerTanggal);
+                });
+                
+            } else if (currentTab === 'Puasa') {
+                const statusOptions = ['mengerjakan', 'tidak mengerjakan', 'sakit', 'haid'];
+                
+                contentArea.innerHTML = `
+                    <div class="space-y-4">
+                        ${Array.from({length: 30}, (_, i) => i + 1).map(tanggal => `
+                            <div class="border rounded-xl p-5 shadow-sm hover:shadow-md transition bg-white" style="border-left: 5px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                                    <h3 class="font-bold" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                        📅 Ramadhan Hari ke-${tanggal}
+                                    </h3>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <div class="flex flex-wrap gap-2">
+                                        ${statusOptions.map(status => `
+                                            <button 
+                                                class="other-btn px-4 py-2 rounded-lg transition-all border ${puasaData[tanggal] === status ? 'shadow-md font-bold' : ''}" 
+                                                data-tanggal="${tanggal}" 
+                                                data-status="${status}"
+                                                style="${puasaData[tanggal] === status ? 
+                                                    `background: ${config.primary_action_color || defaultConfig.primary_action_color}; color: white;` : 
+                                                    `color: ${config.text_color || defaultConfig.text_color}; border-color: #d1d5db; background: white;`}">
+                                                ${status.charAt(0).toUpperCase() + status.slice(1)}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <button 
+                                    class="simpan-tanggal-btn w-full py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90" 
+                                    data-tanggal="${tanggal}"
+                                    style="background: ${config.secondary_action_color || defaultConfig.secondary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                    💾 Simpan Harian (Hari ke-${tanggal})
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                document.querySelectorAll('.other-btn').forEach(btn => {
+                    btn.addEventListener('click', handleOtherStatus);
+                });
+                document.querySelectorAll('.simpan-tanggal-btn').forEach(btn => {
+                    btn.addEventListener('click', handleSimpanPerTanggal);
+                });
+            } else if (currentTab === 'Ceramah') {
+                contentArea.innerHTML = `
+                    <div class="space-y-4">
+                        ${Array.from({length: 30}, (_, i) => i + 1).map(tanggal => `
+                            <div class="border rounded-xl p-5 shadow-sm hover:shadow-md transition bg-white" style="border-left: 5px solid ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                <h3 class="font-bold mb-4 border-b pb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                    📅 Ramadhan Hari ke-${tanggal}
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Penceramah</label>
+                                        <input 
+                                            type="text" 
+                                            class="ceramah-penceramah w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Nama penceramah"
+                                            value="${ceramahData[tanggal]?.penceramah || ''}">
+                                    </div>
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Tempat</label>
+                                        <input 
+                                            type="text" 
+                                            class="ceramah-tempat w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Lokasi ceramah"
+                                            value="${ceramahData[tanggal]?.tempat || ''}">
+                                    </div>
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Media</label>
+                                        <input 
+                                            type="text" 
+                                            class="ceramah-media w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Youtube, Medsos, dll"
+                                            value="${ceramahData[tanggal]?.media || ''}">
+                                    </div>
+                                    <div>
+                                        <label class="block mb-1 text-sm font-medium text-gray-600">Ringkasan Ceramah</label>
+                                        <textarea 
+                                            class="ceramah-ringkasan w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                                            data-tanggal="${tanggal}"
+                                            placeholder="Ringkasan isi ceramah"
+                                            rows="2">${ceramahData[tanggal]?.ringkasan || ''}</textarea>
+                                    </div>
+                                </div>
+                                <button 
+                                    class="simpan-tanggal-btn w-full py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90" 
+                                    data-tanggal="${tanggal}"
+                                    style="background: ${config.secondary_action_color || defaultConfig.secondary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 0.9}px;">
+                                    💾 Simpan Harian (Hari ke-${tanggal})
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                document.querySelectorAll('.ceramah-penceramah').forEach(input => {
+                    input.addEventListener('input', handleCeramahInput);
+                });
+                document.querySelectorAll('.ceramah-tempat').forEach(input => {
+                    input.addEventListener('input', handleCeramahInput);
+                });
+                document.querySelectorAll('.ceramah-media').forEach(input => {
+                    input.addEventListener('input', handleCeramahInput);
+                });
+                document.querySelectorAll('.ceramah-ringkasan').forEach(input => {
+                    input.addEventListener('input', handleCeramahInput);
+                });
+                document.querySelectorAll('.simpan-tanggal-btn').forEach(btn => {
+                    btn.addEventListener('click', handleSimpanPerTanggal);
+                });
+            }
+        }
+
+        function handleTarawihStatus(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const status = e.target.dataset.status;
+            if (!tarawihData[tanggal]) {
+                tarawihData[tanggal] = { status: null, tempat: null };
+            }
+            tarawihData[tanggal].status = status;
+            saveUserState();
+            renderContentArea();
+        }
+
+        function handleTarawihTempat(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const tempat = e.target.dataset.tempat;
+            if (!tarawihData[tanggal]) {
+                tarawihData[tanggal] = { status: null, tempat: null };
+            }
+            tarawihData[tanggal].tempat = tempat;
+            saveUserState();
+            renderContentArea();
+        }
+
+        function handleTadarusPilihan(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const pilihan = e.target.dataset.pilihan;
+            if (!tadarusData[tanggal]) {
+                tadarusData[tanggal] = { pilihan: null, surat: '', ayat: '', ustadz: '' };
+            }
+            tadarusData[tanggal].pilihan = pilihan;
+            saveUserState();
+            renderContentArea();
+        }
+
+        function handleTadarusInput(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const isSurat = e.target.classList.contains('tadarus-surat');
+            const isAyat = e.target.classList.contains('tadarus-ayat');
+            const isUstadz = e.target.classList.contains('tadarus-ustadz');
+            const value = e.target.value;
+            if (!tadarusData[tanggal]) {
+                tadarusData[tanggal] = { pilihan: null, surat: '', ayat: '', ustadz: '' };
+            }
+            if (isSurat) {
+                tadarusData[tanggal].surat = value;
+            } else if (isAyat) {
+                tadarusData[tanggal].ayat = value;
+            } else if (isUstadz) {
+                tadarusData[tanggal].ustadz = value;
+            }
+            saveUserState();
+        }
+
+        function handleOtherStatus(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const status = e.target.dataset.status;
+            if (currentTab === 'Puasa') {
+                puasaData[tanggal] = status;
+            }
+            saveUserState();
+            renderContentArea();
+        }
+
+        function handleCeramahInput(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const value = e.target.value;
+            if (!ceramahData[tanggal]) {
+                ceramahData[tanggal] = { penceramah: '', tempat: '', media: '', ringkasan: '' };
+            }
+            if (e.target.classList.contains('ceramah-penceramah')) {
+                ceramahData[tanggal].penceramah = value;
+            } else if (e.target.classList.contains('ceramah-tempat')) {
+                ceramahData[tanggal].tempat = value;
+            } else if (e.target.classList.contains('ceramah-media')) {
+                ceramahData[tanggal].media = value;
+            } else if (e.target.classList.contains('ceramah-ringkasan')) {
+                ceramahData[tanggal].ringkasan = value;
+            }
+            saveUserState();
+        }
+
+        function handleShalatStatus(e) {
+            const tanggal = parseInt(e.target.dataset.tanggal);
+            const waktu = e.target.dataset.waktu;
+            const status = e.target.dataset.status;
+            if (!shalatData[tanggal]) {
+                shalatData[tanggal] = { 'Subuh': null, 'Dzuhur': null, 'Ashar': null, 'Maghrib': null, 'Isya': null };
+            }
+            shalatData[tanggal][waktu] = status;
+            saveUserState();
+            renderContentArea();
+        }
+
+        function handleTabChange(e) {
+            currentTab = e.target.dataset.tab;
+            showAmalanPage();
+        }
+
+        async function handleSimpanPerWaktu(e) {
+            const tanggal = e.target.dataset.tanggal;
+            const waktu = e.target.dataset.waktu;
+            const btn = e.target;
+            
+            btn.disabled = true;
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '⏳';
+            
+            let dataToSave = {
+                nama: currentUser.nama_lengkap,
+                kelas: currentUser.kelas,
+                password: currentUser.password,
+                kategori: currentTab,
+                tanggal: tanggal,
+                subuh: null, dzuhur: null, ashar: null, maghrib: null, isya: null,
+                hadir: false
+            };
+            
+            if (currentTab === 'Shalat Fardu') {
+                dataToSave.hadir = JSON.stringify(shalatData[tanggal]);
+            }
+            
+            allRecords.push(dataToSave);
+            saveAllRecords();
+
+            await window.dataSdk.create(dataToSave);
+            
+            try {
+                const googleData = {
+                    nama: currentUser.nama_lengkap,
+                    kelas: currentUser.kelas,
+                    password: currentUser.password,
+                    sheet: currentTab,
+                    kategori: currentTab,
+                    tanggal: tanggal,
+                    hadir: dataToSave.hadir,
+                    shalat_detail: shalatData[tanggal]
+                };
+                
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(googleData)
+                });
+            } catch (error) {
+                console.error('Error saving:', error);
+            }
+            
+            showToast(`Data ${waktu} (Hari ke-${tanggal}) berhasil disimpan!`);
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
+
+        async function handleSimpanPerTanggal(e) {
+            if (allRecords.length >= 999) {
+                showToast('Maksimum 999 data tercapai.', false);
+                return;
+            }
+
+            const tanggal = e.target.dataset.tanggal;
+            const btn = e.target;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Menyimpan...';
+            
+            let dataToSave = {
+                nama: currentUser.nama_lengkap,
+                kelas: currentUser.kelas,
+                password: currentUser.password,
+                kategori: currentTab,
+                tanggal: tanggal,
+                subuh: null, dzuhur: null, ashar: null, maghrib: null, isya: null,
+                hadir: false
+            };
+            
+            if (currentTab === 'Shalat Fardu') dataToSave.hadir = JSON.stringify(shalatData[tanggal]);
+            else if (currentTab === 'Tarawih') dataToSave.hadir = JSON.stringify(tarawihData[tanggal]);
+            else if (currentTab === 'Puasa') dataToSave.hadir = JSON.stringify(puasaData[tanggal]);
+            else if (currentTab === 'Tadarus') dataToSave.hadir = JSON.stringify(tadarusData[tanggal]);
+            else if (currentTab === 'Ceramah') dataToSave.hadir = JSON.stringify(ceramahData[tanggal]);
+            
+            allRecords.push(dataToSave);
+            saveAllRecords();
+
+            await window.dataSdk.create(dataToSave);
+            
+            try {
+                const googleData = {
+                    nama: currentUser.nama_lengkap,
+                    kelas: currentUser.kelas,
+                    password: currentUser.password,
+                    sheet: currentTab,
+                    kategori: currentTab,
+                    tanggal: tanggal,
+                    hadir: dataToSave.hadir,
+                    shalat_detail: currentTab === 'Shalat Fardu' ? shalatData[tanggal] : null,
+                    tarawih_detail: currentTab === 'Tarawih' ? tarawihData[tanggal] : null,
+                    puasa_detail: currentTab === 'Puasa' ? puasaData[tanggal] : null,
+                    tadarus_detail: currentTab === 'Tadarus' ? tadarusData[tanggal] : null,
+                    ceramah_detail: currentTab === 'Ceramah' ? ceramahData[tanggal] : null
+                };
+                
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(googleData)
+                });
+            } catch (error) {
+                console.error('Error saving:', error);
+            }
+            
+            showToast(`Data hari ke-${tanggal} berhasil dikirim!`);
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+
+        async function handleSimpanData() {
+            if (allRecords.length >= 999) return;
+            const simpanDataBtn = document.getElementById('simpanDataBtn');
+            simpanDataBtn.disabled = true;
+            simpanDataBtn.textContent = 'Menyimpan Semua...';
+            
+            simpanDataBtn.disabled = false;
+            simpanDataBtn.textContent = `Simpan Semua Data ${currentTab}`;
+        }
+
+        function handleLogout() {
+            showConfirmDialog("Apakah Anda yakin ingin keluar?", () => {
+                safeRemoveStorage('ramadhanUser');
+                currentUser = null;
+                showLoginPage();
+                showToast("Berhasil keluar.");
+            });
+        }
+
+        function showLaporanPage() {
+            const config = window.elementSdk?.config || defaultConfig;
+            const customFont = config.font_family || defaultConfig.font_family;
+            const baseFontStack = 'Arial, sans-serif';
+            const baseSize = config.font_size || defaultConfig.font_size;
+            
+            const isAdmin = currentUser && currentUser.nama_lengkap === '*' && currentUser.password === '*';
+            
+            if (allRecords.length === 0) {
+            }
+            
+            const allStudents = [...new Set(allRecords.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))]
+                .map(s => JSON.parse(s))
+                .sort((a, b) => String(a.nama).localeCompare(String(b.nama)));
+            
+            const tingkatSet = new Set();
+            const kelasSet = new Set();
+            allStudents.forEach(student => {
+                if(student.kelas && typeof student.kelas === 'string') {
+                    const tingkat = student.kelas.charAt(0);
+                    tingkatSet.add(tingkat);
+                    kelasSet.add(student.kelas);
+                }
+            });
+            
+            const tingkatList = Array.from(tingkatSet).sort();
+            const kelasList = Array.from(kelasSet).sort();
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="w-full h-full overflow-auto" style="background: ${config.background_color || defaultConfig.background_color};">
+                    <div class="max-w-6xl mx-auto p-6">
+                        <div class="rounded-xl shadow-lg p-6 mb-6 flex justify-between items-center" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h1 class="font-bold text-4xl" style="font-family: ${customFont}, ${baseFontStack}; color: ${config.text_color || defaultConfig.text_color};">📋</h1>
+                            <div class="flex gap-2">
+                                <button id="refreshDataBtn" class="px-4 py-2 rounded-lg text-white transition-all hover:opacity-90 shadow bg-blue-500 hover:bg-blue-600 flex items-center gap-2" style="font-family: ${customFont}, ${baseFontStack};">
+                                    <span>🔄</span> Refresh Data
+                                </button>
+                                <button id="backToAmalanBtn2" class="px-4 py-2 rounded-lg text-white transition-all hover:opacity-90 shadow" style="background: ${config.primary_action_color || defaultConfig.primary_action_color}; font-family: ${customFont}, ${baseFontStack};">
+                                    ${isAdmin ? 'Keluar' : '← Kembali'}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="rounded-xl shadow-lg p-6 mb-6" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h2 class="font-bold mb-4 border-b pb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.3}px; color: ${config.text_color || defaultConfig.text_color};">🔍 Pencarian & Filter</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block mb-2 font-medium">Filter Tingkat</label>
+                                    <select id="filterTingkat" class="w-full px-4 py-2 border rounded-lg">
+                                        <option value="all">Semua Tingkat</option>
+                                        ${tingkatList.map(t => `<option value="${t}">Kelas ${t}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-2 font-medium">Filter Kelas</label>
+                                    <select id="filterKelas" class="w-full px-4 py-2 border rounded-lg">
+                                        <option value="all">Semua Kelas</option>
+                                        ${kelasList.map(k => `<option value="${k}">${k}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-2 font-medium">Cari Nama</label>
+                                    <input type="text" id="searchNamaInput" class="w-full px-4 py-2 border rounded-lg" placeholder="Ketik nama...">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="rounded-xl shadow-lg p-6" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h2 class="font-bold mb-4 flex items-center gap-2">
+                                <span>👨‍🎓</span> Daftar Siswa (<span id="studentCount">${allStudents.length}</span>)
+                            </h2>
+                            <div id="studentListContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            let currentFilters = { tingkat: 'all', kelas: 'all', nama: '' };
+            
+            function applyFilters() {
+                let filtered = [...allStudents];
+                if (currentFilters.tingkat !== 'all') filtered = filtered.filter(s => s.kelas.startsWith(currentFilters.tingkat));
+                if (currentFilters.kelas !== 'all') filtered = filtered.filter(s => s.kelas === currentFilters.kelas);
+                if (currentFilters.nama) filtered = filtered.filter(s => s.nama.toLowerCase().includes(currentFilters.nama.toLowerCase()));
+                renderStudentList(filtered);
+            }
+            
+            function renderStudentList(students) {
+                const container = document.getElementById('studentListContainer');
+                document.getElementById('studentCount').textContent = students.length;
+                
+                if (students.length === 0) {
+                    container.innerHTML = `<div class="text-center p-8 bg-gray-50 rounded-xl border border-dashed border-gray-300"><p class="text-gray-500">${isAdmin && allRecords.length === 0 ? 'Sedang memuat data...' : 'Tidak ada siswa yang sesuai'}</p></div>`;
+                    return;
+                }
+                
+                container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${students.map((student, index) => {
+                        const studentRecords = allRecords.filter(r => r.nama === student.nama && r.kelas === student.kelas);
+                        return `
+                            <div class="border rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all student-card bg-white hover:border-emerald-400 group" data-idx="${index}">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-bold group-hover:text-emerald-600 transition-colors">${student.nama}</h3>
+                                        <p class="text-sm bg-gray-100 inline-block px-2 py-0.5 rounded mt-1">Kelas: ${student.kelas}</p>
+                                    </div>
+                                    <div class="text-right"><span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded">${studentRecords.length} data</span></div>
+                                </div>
+                                <div class="mt-3 pt-3 border-t text-right"><span class="text-xs text-blue-600 font-semibold group-hover:underline">Lihat Detail →</span></div>
+                            </div>`;
+                    }).join('')}
+                </div>`;
+                
+                document.querySelectorAll('.student-card').forEach((card, i) => {
+                    card.addEventListener('click', () => showStudentDetail(students[i]));
+                });
+            }
+            
+            function showStudentDetail(student) {
+                const studentRecords = allRecords.filter(r => r.nama === student.nama && r.kelas === student.kelas);
+                const groupedData = { 'Shalat Fardu': [], 'Tarawih': [], 'Puasa': [], 'Tadarus': [], 'Ceramah': [] };
+                
+                // Grouping dan Merging Data untuk perhitungan statistik yang akurat
+                Object.keys(groupedData).forEach(cat => {
+                    const rawRecords = studentRecords.filter(r => r.kategori === cat);
+                    const mergedMap = {};
+                    
+                    rawRecords.forEach(r => {
+                        const tgl = r.tanggal;
+                        if (!mergedMap[tgl]) {
+                            mergedMap[tgl] = r;
+                        } else {
+                            const prevData = parseRecordData(mergedMap[tgl].hadir);
+                            const currData = parseRecordData(r.hadir);
+                            
+                            if (typeof prevData === 'object' && prevData !== null && typeof currData === 'object' && currData !== null) {
+                                const mergedHadir = { ...prevData };
+                                for (const key in currData) {
+                                    if (currData[key]) mergedHadir[key] = currData[key];
+                                }
+                                mergedMap[tgl].hadir = JSON.stringify(mergedHadir);
+                            } else {
+                                mergedMap[tgl] = r;
+                            }
+                        }
+                    });
+                    groupedData[cat] = Object.values(mergedMap).sort((a, b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                });
+
+                // --- HITUNG STATISTIK ---
+                const stats = {
+                    shalat: {},
+                    tarawih: {},
+                    puasa: {},
+                    tadarus: 0,
+                    ceramah: 0
+                };
+
+                // Hitung Shalat
+                groupedData['Shalat Fardu'].forEach(r => {
+                    const data = parseRecordData(r.hadir);
+                    if (data && typeof data === 'object') {
+                        Object.entries(data).forEach(([waktu, status]) => {
+                            if (status) {
+                                if (!stats.shalat[waktu]) stats.shalat[waktu] = {};
+                                const s = status.toLowerCase();
+                                if (!stats.shalat[waktu][s]) stats.shalat[waktu][s] = 0;
+                                stats.shalat[waktu][s]++;
+                            }
+                        });
+                    }
+                });
+
+                // Hitung Tarawih
+                groupedData['Tarawih'].forEach(r => {
+                    const data = parseRecordData(r.hadir);
+                    if (data && data.status) {
+                        const s = data.status.toLowerCase();
+                        if (!stats.tarawih[s]) stats.tarawih[s] = 0;
+                        stats.tarawih[s]++;
+                    }
+                });
+
+                // Hitung Puasa
+                groupedData['Puasa'].forEach(r => {
+                    const data = parseRecordData(r.hadir);
+                    const status = typeof data === 'string' ? data : (data?.status);
+                    if (status) {
+                        const s = status.toLowerCase();
+                        if (!stats.puasa[s]) stats.puasa[s] = 0;
+                        stats.puasa[s]++;
+                    }
+                });
+                
+                // Hitung Tadarus & Ceramah (Jumlah Hari)
+                stats.tadarus = groupedData['Tadarus'].length;
+                stats.ceramah = groupedData['Ceramah'].length;
+
+                // --- GENERATE HTML STATISTIK ---
+                let statsHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
+                
+                // Card Shalat
+                if (Object.keys(stats.shalat).length > 0) {
+                    statsHTML += `<div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                        <h3 class="font-bold text-blue-800 mb-2 flex items-center gap-2">🕌 Statistik Shalat Fardu</h3>
+                        <div class="text-sm space-y-2">`;
+                    ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'].forEach(waktu => {
+                        if (stats.shalat[waktu]) {
+                            const details = Object.entries(stats.shalat[waktu])
+                                .map(([s, c]) => `<span class="capitalize">${s}: <b>${c}</b></span>`)
+                                .join(', ');
+                            statsHTML += `<div class="flex justify-between border-b border-blue-100 pb-1 last:border-0">
+                                <span class="font-semibold text-blue-900 w-20">${waktu}</span>
+                                <span class="text-gray-700 flex-1 text-right">${details}</span>
+                            </div>`;
+                        }
+                    });
+                    statsHTML += `</div></div>`;
+                }
+
+                // Card Puasa & Tarawih
+                if (Object.keys(stats.puasa).length > 0 || Object.keys(stats.tarawih).length > 0) {
+                    statsHTML += `<div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 shadow-sm">
+                        <h3 class="font-bold text-emerald-800 mb-2 flex items-center gap-2">✨ Ibadah Lainnya</h3>
+                        <div class="text-sm space-y-3">`;
+                    
+                    if (Object.keys(stats.puasa).length > 0) {
+                        const puasaDetails = Object.entries(stats.puasa)
+                            .map(([s, c]) => `<span class="capitalize bg-white px-2 py-0.5 rounded border border-emerald-100 text-xs">${s}: <b>${c}</b></span>`)
+                            .join(' ');
+                        statsHTML += `<div><div class="font-semibold text-emerald-900 mb-1">🍽️ Puasa</div><div class="flex flex-wrap gap-1">${puasaDetails}</div></div>`;
+                    }
+
+                    if (Object.keys(stats.tarawih).length > 0) {
+                        const tarawihDetails = Object.entries(stats.tarawih)
+                            .map(([s, c]) => `<span class="capitalize bg-white px-2 py-0.5 rounded border border-emerald-100 text-xs">${s}: <b>${c}</b></span>`)
+                            .join(' ');
+                        statsHTML += `<div><div class="font-semibold text-emerald-900 mb-1">🌙 Tarawih</div><div class="flex flex-wrap gap-1">${tarawihDetails}</div></div>`;
+                    }
+                    statsHTML += `</div></div>`;
+                }
+
+                // Card Tadarus & Ceramah
+                if (stats.tadarus > 0 || stats.ceramah > 0) {
+                     statsHTML += `<div class="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm md:col-span-2">
+                        <div class="flex justify-around text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-purple-700">${stats.tadarus}</div>
+                                <div class="text-xs font-semibold text-purple-900 uppercase tracking-wide">📖 Hari Tadarus</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-purple-700">${stats.ceramah}</div>
+                                <div class="text-xs font-semibold text-purple-900 uppercase tracking-wide">🎙️ Hari Ceramah</div>
+                            </div>
+                        </div>
+                     </div>`;
+                }
+                
+                statsHTML += `</div>`;
+
+
+                const app = document.getElementById('app');
+                app.innerHTML = `
+                    <div class="w-full h-full overflow-auto" style="background: ${config.background_color || defaultConfig.background_color};">
+                        <div class="max-w-4xl mx-auto p-6">
+                            <div class="rounded-xl shadow-lg p-6 mb-6" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                                <h1 class="font-bold mb-2" style="font-size: ${baseSize * 1.8}px;">📊 Detail Siswa</h1>
+                                <div class="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <p class="text-sm text-gray-500 uppercase tracking-wider font-semibold">Nama Lengkap</p>
+                                            <p class="font-bold text-xl text-gray-800">${student.nama}</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-sm text-gray-500 uppercase tracking-wider font-semibold">Kelas</p>
+                                            <span class="inline-block bg-blue-100 text-blue-800 text-lg font-bold px-3 py-1 rounded-lg">${student.kelas}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Bagian Statistik / Jumlah -->
+                                ${statsHTML}
+
+                                <button id="backToLaporanBtn" class="w-full sm:w-auto px-6 py-2.5 rounded-lg text-white font-medium shadow transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-2" style="background: ${config.primary_action_color || defaultConfig.primary_action_color};">
+                                    <span>←</span> Kembali ke Daftar
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4">
+                            ${Object.keys(groupedData).map(kategori => {
+                                let records = groupedData[kategori];
+                                return `
+                                <div class="rounded-xl shadow-md p-6 bg-white border border-gray-100">
+                                    <h2 class="font-bold mb-4 pb-2 border-b-2 flex justify-between items-center" style="border-color: ${config.primary_action_color || '#e5e7eb'};">
+                                        <span class="flex items-center gap-2">${getCategoryIcon(kategori)} ${kategori}</span>
+                                        <span class="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-1 rounded-full">${records.length} data</span>
+                                    </h2>
+                                    ${records.length === 0 ? `<p class="text-gray-400 italic text-center py-4">Belum ada data.</p>` :
+                                        `<div class="space-y-3">${records.map(r => `
+                                            <div class="border rounded-lg p-3 bg-gray-50 hover:bg-white hover:shadow-sm transition-all">
+                                                <p class="font-semibold text-gray-800 mb-1 flex items-center gap-1">
+                                                    <span>📅</span> Hari ke-${r.tanggal}
+                                                </p>
+                                                <div class="mt-1 text-sm text-gray-600 ml-6">
+                                                    ${renderDetailData(kategori, parseRecordData(r.hadir))}
+                                                </div>
+                                            </div>
+                                        `).join('')}</div>`
+                                    }
+                                </div>
+                            `;
+                            }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('backToLaporanBtn').addEventListener('click', showLaporanPage);
+            }
+            
+            document.getElementById('filterTingkat').addEventListener('change', (e) => { currentFilters.tingkat = e.target.value; applyFilters(); });
+            document.getElementById('filterKelas').addEventListener('change', (e) => { currentFilters.kelas = e.target.value; applyFilters(); });
+            document.getElementById('searchNamaInput').addEventListener('input', (e) => { currentFilters.nama = e.target.value; applyFilters(); });
+            document.getElementById('backToAmalanBtn2').addEventListener('click', isAdmin ? handleLogout : showAmalanPage);
+            
+            // Tambahkan listener untuk refresh
+            document.getElementById('refreshDataBtn').addEventListener('click', fetchAllDataForAdmin);
+
+            applyFilters();
+        }
+
+        // --- HELPER FUNCTIONS YANG SEMPAT HILANG ---
+        function getCategoryIcon(kategori) {
+            switch(kategori) {
+                case 'Shalat Fardu': return '🕌';
+                case 'Tarawih': return '🌙';
+                case 'Puasa': return '🍽️';
+                case 'Tadarus': return '📖';
+                case 'Ceramah': return '🎙️';
+                default: return '📝';
+            }
+        }
+
+        function parseRecordData(hadirData) {
+            try {
+                if (typeof hadirData === 'string') {
+                    return JSON.parse(hadirData);
+                }
+                return hadirData;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function renderDetailData(kategori, data) {
+            if (!data) return '<span class="text-gray-400 italic">Tidak ada data detail.</span>';
+
+            if (kategori === 'Shalat Fardu') {
+                if (typeof data !== 'object') return 'Data tersimpan';
+                const entries = Object.entries(data).filter(([_, val]) => val);
+                if (entries.length === 0) return '<span class="text-gray-400 italic">Belum ada waktu shalat diisi.</span>';
+                
+                return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                    ${entries.map(([waktu, status]) => 
+                        `<div class="flex justify-between border-b border-gray-200 py-1 last:border-0">
+                            <span class="font-medium text-gray-700">${waktu}</span>
+                            <span class="text-gray-900 capitalize">${status}</span>
+                        </div>`
+                    ).join('')}
+                </div>`;
+            } 
+            else if (kategori === 'Tarawih') {
+                return `<div class="space-y-1">
+                    <div><span class="font-medium text-gray-700">Status:</span> ${data.status || '-'}</div>
+                    <div><span class="font-medium text-gray-700">Tempat:</span> ${data.tempat || '-'}</div>
+                </div>`;
+            } 
+            else if (kategori === 'Puasa') {
+                const status = typeof data === 'string' ? data : (data.status || '-');
+                return `<div><span class="font-medium text-gray-700">Status Puasa:</span> ${status}</div>`;
+            } 
+            else if (kategori === 'Tadarus') {
+                return `<div class="space-y-1">
+                    <div><span class="font-medium text-gray-700">Metode:</span> ${data.pilihan || '-'}</div>
+                    ${data.surat ? `<div><span class="font-medium text-gray-700">Surat:</span> ${data.surat} ${data.ayat ? `(Ayat ${data.ayat})` : ''}</div>` : ''}
+                    ${data.ustadz ? `<div><span class="font-medium text-gray-700">Nama Ustadz:</span> ${data.ustadz}</div>` : ''}
+                </div>`;
+            } 
+            else if (kategori === 'Ceramah') {
+                return `<div class="space-y-1">
+                    <div><span class="font-medium text-gray-700">Penceramah:</span> ${data.penceramah || '-'}</div>
+                    <div><span class="font-medium text-gray-700">Tempat:</span> ${data.tempat || '-'}</div>
+                    <div><span class="font-medium text-gray-700">Media:</span> ${data.media || '-'}</div>
+                    ${data.ringkasan ? `<div class="mt-1"><span class="font-medium text-gray-700">Ringkasan:</span><p class="text-gray-600 bg-gray-50 p-2 rounded mt-1 text-xs italic border">${data.ringkasan}</p></div>` : ''}
+                </div>`;
+            }
+            return JSON.stringify(data);
+        }
+        // -------------------------------------------
+
+        function showRekapPage() {
+            const config = window.elementSdk?.config || defaultConfig;
+            const customFont = config.font_family || defaultConfig.font_family;
+            const baseFontStack = 'Arial, sans-serif';
+            const baseSize = config.font_size || defaultConfig.font_size;
+
+            // Filter data khusus user yang login
+            const myRecords = allRecords.filter(r => 
+                r.nama === currentUser.nama_lengkap && r.kelas === currentUser.kelas
+            );
+
+            // Grouping data berdasarkan kategori
+            const groupedData = {
+                'Shalat Fardu': [],
+                'Tarawih': [],
+                'Puasa': [],
+                'Tadarus': [],
+                'Ceramah': []
+            };
+
+            myRecords.forEach(record => {
+                if (groupedData[record.kategori]) {
+                    groupedData[record.kategori].push(record);
+                }
+            });
+
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="w-full h-full overflow-auto" style="background: ${config.background_color || defaultConfig.background_color};">
+                    <div class="max-w-4xl mx-auto p-4 md:p-6 pb-24">
+                        <!-- Header Card -->
+                        <div class="rounded-xl shadow-lg p-6 mb-6 transform transition hover:scale-[1.01]" style="background: ${config.surface_color || defaultConfig.surface_color};">
+                            <h1 class="font-bold mb-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.8}px; color: ${config.text_color || defaultConfig.text_color};">📊 Rekap Ibadah Saya</h1>
+                            <div class="mb-4 bg-gray-50 p-3 rounded-lg">
+                                <p style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};"><strong>👤 Nama:</strong> ${currentUser.nama_lengkap}</p>
+                                <p style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};"><strong>🏫 Kelas:</strong> ${currentUser.kelas}</p>
+                            </div>
+                            <button id="backToInputBtn" class="px-6 py-2 rounded-lg text-white font-bold shadow-md transition-all hover:opacity-90 hover:shadow-lg" style="background: ${config.primary_action_color || defaultConfig.primary_action_color}; font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize}px;">
+                                ← Kembali Mengisi Data
+                            </button>
+                        </div>
+                        
+                        <!-- List Rekap per Kategori -->
+                        <div class="space-y-6">
+                            ${Object.keys(groupedData).map(kategori => {
+                                let records = groupedData[kategori];
+                                
+                                // --- LOGIKA PENGGABUNGAN DATA (MERGE) ---
+                                const mergedRecords = {};
+                                records.forEach(r => {
+                                    const tgl = r.tanggal;
+                                    if (!mergedRecords[tgl]) {
+                                        mergedRecords[tgl] = r;
+                                    } else {
+                                        const prevData = parseRecordData(mergedRecords[tgl].hadir);
+                                        const currData = parseRecordData(r.hadir);
+                                        
+                                        if (typeof prevData === 'object' && prevData !== null && typeof currData === 'object' && currData !== null) {
+                                            const mergedHadir = { ...prevData };
+                                            for (const key in currData) {
+                                                if (currData[key]) {
+                                                    mergedHadir[key] = currData[key];
+                                                }
+                                            }
+                                            mergedRecords[tgl].hadir = JSON.stringify(mergedHadir);
+                                        } else {
+                                            mergedRecords[tgl] = r;
+                                        }
+                                    }
+                                });
+                                
+                                records = Object.values(mergedRecords);
+
+                                records.sort((a, b) => {
+                                    const dateA = parseInt(a.tanggal) || 0;
+                                    const dateB = parseInt(b.tanggal) || 0;
+                                    return dateA - dateB;
+                                });
+
+                                return `
+                                <div class="rounded-xl shadow-md bg-white overflow-hidden border border-gray-100">
+                                    <div class="p-4 border-b border-gray-100 flex justify-between items-center" style="background-color: #f9fafb;">
+                                        <h2 class="font-bold flex items-center gap-2" style="font-family: ${customFont}, ${baseFontStack}; font-size: ${baseSize * 1.2}px; color: ${config.text_color || defaultConfig.text_color};">
+                                            ${getCategoryIcon(kategori)} ${kategori}
+                                        </h2>
+                                        <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                                            ${records.length} hari
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="divide-y divide-gray-100">
+                                        ${records.length === 0 ? 
+                                            `<div class="p-6 text-center text-gray-400 italic">Belum ada data ${kategori} yang disimpan.</div>` : 
+                                            records.map(record => {
+                                                const data = parseRecordData(record.hadir);
+                                                const isBulanan = isNaN(parseInt(record.tanggal));
+                                                const tanggalLabel = isBulanan ? 'Data Bulanan' : `Hari ke-${record.tanggal}`;
+                                                
+                                                return `
+                                                <div class="p-4 hover:bg-gray-50 transition-colors">
+                                                    <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
+                                                        <div class="font-semibold text-gray-700 min-w-[100px]">📅 ${tanggalLabel}</div>
+                                                        <div class="flex-1 text-sm text-gray-600">
+                                                            ${renderDetailData(kategori, data)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                `;
+                                            }).join('')
+                                        }
+                                    </div>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('backToInputBtn').addEventListener('click', showAmalanPage);
+        }
+
+        async function onConfigChange(config) {
+            Object.assign(window.elementSdk.config, config);
+            if (currentUser) {
+                if (currentUser.nama_lengkap === '*' && currentUser.password === '*') showLaporanPage();
+                else showAmalanPage();
+            } else showLoginPage();
+        }
+
+        const dataHandler = { onDataChanged(data) { allRecords = data; saveAllRecords(); } };
+
+        async function init() {
+            loadAllRecords();
+            const savedUser = safeGetStorage('ramadhanUser');
+            let isAutoLoggedIn = false;
+
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    loadUserState();
+                    isAutoLoggedIn = true;
+                    if (currentUser.nama_lengkap === '*' && currentUser.password === '*') showLaporanPage();
+                    else showAmalanPage();
+                    setTimeout(() => {
+                        if (!isAdmin()) syncUserFromCloud();
+                    }, 500);
+                } catch (e) {
+                    safeRemoveStorage('ramadhanUser');
+                    currentUser = null;
+                }
+            }
+
+            if (window.dataSdk) await window.dataSdk.init(dataHandler);
+            if (window.elementSdk) window.elementSdk.init({ defaultConfig, onConfigChange, mapToCapabilities: () => ({}), mapToEditPanelValues: () => new Map() });
+            
+            if (!isAutoLoggedIn && !document.getElementById('app').innerHTML.trim()) showLoginPage();
+        }
+        
+        function isAdmin() { return currentUser && currentUser.nama_lengkap === '*' && currentUser.password === '*'; }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+        else init();
+    </script>
+ </body>
+</html>
     /**
      * =========================================================================
      * [SECTION 3] SISTEM INTI (CORE FRAMEWORK) - SISTEM LAMA TETAP
@@ -377,4 +2051,5 @@
     init();
   </script>
  </body>
+
 </html>
