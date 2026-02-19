@@ -320,7 +320,7 @@
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
                         const cat = item.kategori;
-                        let detail = item.detail || item.hadir;
+                        let detail = item.hadir || item.detail;
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
                         
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
@@ -343,16 +343,6 @@
             loadingToast.innerHTML = `<span>🔄</span> Sinkronisasi database...`;
             document.body.appendChild(loadingToast);
 
-            // Cek file informasi di Drive
-            try {
-                const checkUrl = new URL(GOOGLE_SCRIPT_URL);
-                checkUrl.searchParams.append('action', 'checkInfo');
-                checkUrl.searchParams.append('ss_id', SCHOOL_ID);
-                const checkRes = await fetch(checkUrl);
-                const checkData = await checkRes.json();
-                hasInfoFiles = checkData.hasFiles === true;
-            } catch (e) { hasInfoFiles = true; }
-
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('action', 'readAll');
@@ -362,7 +352,11 @@
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     allRecords = result.data.map(item => ({
-                        nama: item.nama, kelas: item.kelas, kategori: item.kategori, tanggal: item.tanggal, hadir: item.detail || item.hadir
+                        nama: item.nama, 
+                        kelas: item.kelas, 
+                        kategori: item.kategori, 
+                        tanggal: item.tanggal, 
+                        hadir: item.hadir || item.detail 
                     }));
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
@@ -609,7 +603,6 @@
             document.getElementById('backBtn').onclick = showAmalanPage;
         }
 
-        // FUNGSI CETAK LAPORAN GLOBAL
         function handleCetakGlobal(tingkat, kelas) {
             const allMerged = getMergedRecords(allRecords);
             let students = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s));
@@ -646,7 +639,6 @@
             printWindow.document.close();
         }
 
-        // FUNGSI CETAK LAPORAN INDIVIDUAL
         function handleCetakLaporanIndividual(student, dataRaw) {
             const data = getMergedRecords(dataRaw);
             const printWindow = window.open('', '_blank');
@@ -761,11 +753,12 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        
         function renderDetailData(k, d) {
             if (!d) return '-'; 
             if (k === 'Shalat Fardu') {
-                const keys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                return keys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`).join(' | ') || '-';
+                const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+                return orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`).join(' | ') || '-';
             } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
             else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
             else if (k === 'Tadarus') return `Metode: <b>${d.pilihan === 'ustadz' ? 'Simakan Bersama Ustadz' : (d.pilihan || '-')}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
