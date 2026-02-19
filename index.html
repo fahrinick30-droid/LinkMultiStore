@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-School Modular System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .tab-button.active { border-bottom: 4px solid #10b981; color: #065f46; background-color: #ecfdf5; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .toast { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .sh-btn-active { background-color: #059669; color: white; border-color: #059669; transform: scale(1.05); }
+
+    /* Animasi Denyut */
+    @keyframes pulseBlue {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+      70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-blue { animation: pulseBlue 2s infinite; }
+    .pulse-green { animation: pulseGreen 2s infinite; }
+  </style>
+ </head>
+ <body class="h-full bg-slate-50 text-slate-800">
+  <div id="app" class="w-full h-full overflow-auto"></div>
+
+  <script>
+    /**
+     * =========================================================================
+     * [SECTION 1] KONFIGURASI SISTEM UTAMA
+     * =========================================================================
+     */
+    const SYSTEM_CONFIG = {
+        GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec',
+        PRAYER_ORDER: ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya']
+    };
+
+    /**
+     * =========================================================================
+     * [SECTION 2] MODUL APLIKASI SISWA (TEMPAT KHUSUS KODE APLIKASI LAIN)
+     * =========================================================================
+     * Anda bisa mengganti object ini dengan logika aplikasi yang berbeda.
+     */
+    const STUDENT_APP_MODULE = {
+        categories: ['Shalat Fardu', 'Tarawih', 'Puasa', 'Tadarus', 'Ceramah'],
+
+        // Inisialisasi variabel data lokal aplikasi
+        initLocalState: function() {
+            window.shalatData = {}; window.tarawihData = {}; window.puasaData = {}; 
+            window.tadarusData = {}; window.ceramahData = {};
+            for (let i = 1; i <= 30; i++) {
+                window.shalatData[i] = { 'Subuh': null, 'Dzuhur': null, 'Ashar': null, 'Maghrib': null, 'Isya': null };
+                window.tarawihData[i] = { status: null, tempat: null };
+                window.puasaData[i] = null;
+                window.tadarusData[i] = { pilihan: null, surat: '', ayat: '' };
+                window.ceramahData[i] = { penceramah: '', tempat: '', ringkasan: '' };
+            }
+        },
+
+        // Kode UI Formulir (Input)
+        renderForm: function(container, tab) {
+            const days = Array.from({length: 30}, (_, i) => i + 1);
+            if (tab === 'Shalat Fardu') {
+                container.innerHTML = `<div class="space-y-8">${days.map(t => `
+                    <div class="p-5 border rounded-2xl bg-white shadow-sm border-l-8 border-emerald-500">
+                        <h3 class="font-black text-emerald-800 mb-4 flex justify-between">📅 Hari ke-${t} <span class="text-[10px] font-normal text-slate-400 italic">Shalat Wajib</span></h3>
+                        <div class="space-y-4">
+                            ${SYSTEM_CONFIG.PRAYER_ORDER.map(w => `
+                                <div class="flex flex-col md:flex-row md:items-center gap-3 pb-3 border-b border-gray-100 last:border-0">
+                                    <div class="w-24 font-bold text-gray-600">⏰ ${w}</div>
+                                    <div class="flex flex-wrap gap-2 flex-1">
+                                        ${['berjamaah','munfarid','haid','tidak shalat'].map(s => `
+                                            <button onclick="updateShalat(${t}, '${w}', '${s}')" class="px-3 py-1.5 text-[10px] rounded-full border-2 transition-all font-semibold ${window.shalatData[t]?.[w] === s ? 'sh-btn-active' : 'bg-white text-gray-500 border-gray-100'}">${s}</button>
+                                        `).join('')}
+                                    </div>
+                                    <button onclick="handleSavePrayer(${t}, '${w}')" class="px-3 py-1.5 text-[10px] rounded-lg bg-blue-600 text-white font-bold shadow hover:bg-blue-700 active:scale-95">💾 Simpan ${w}</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`).join('')}</div>`;
+            } else if (tab === 'Tarawih') {
+                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-indigo-500 shadow-sm"><h3 class="font-black text-indigo-900 mb-4">📅 Hari ke-${t}</h3><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">STATUS</p><div class="flex flex-wrap gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button onclick="updateTarawih(${t}, 'status', '${s}')" class="px-3 py-2 text-xs border-2 rounded-xl font-bold ${window.tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}">${s}</button>`).join('')}</div></div><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">TEMPAT</p><div class="flex gap-2">${['mesjid','rumah'].map(tmp => `<button onclick="updateTarawih(${t}, 'tempat', '${tmp}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}">${tmp}</button>`).join('')}</div></div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
+            } else if (tab === 'Puasa') {
+                container.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-orange-500 shadow-sm"><h3 class="font-black text-orange-900 mb-4">📅 Hari ke-${t}</h3><div class="flex flex-wrap gap-2 mb-4">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button onclick="updatePuasa(${t}, '${s}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-gray-100'}">${s}</button>`).join('')}</div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-orange-500 text-white rounded-xl font-black shadow-lg">💾 SIMPAN PUASA</button></div>`).join('')}</div>`;
+            } else if (tab === 'Tadarus') {
+                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button onclick="updateTadarus(${t}, 'pilihan', '${m}')" class="px-4 py-2 text-xs border-2 rounded-xl font-bold ${window.tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}">${m === 'sendiri' ? 'Sendiri' : 'Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><input type="text" oninput="updateTadarus(${t}, 'surat', this.value)" value="${window.tadarusData[t]?.surat || ''}" placeholder="Nama Surat" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><input type="text" oninput="updateTadarus(${t}, 'ayat', this.value)" value="${window.tadarusData[t]?.ayat || ''}" placeholder="Ayat" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"></div><button onclick="saveModuleData(${t})" class="w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
+            } else if (tab === 'Ceramah') {
+                container.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-3"><input type="text" oninput="updateCeramah(${t}, 'penceramah', this.value)" value="${window.ceramahData[t]?.penceramah || ''}" placeholder="Nama Penceramah" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><input type="text" oninput="updateCeramah(${t}, 'tempat', this.value)" value="${window.ceramahData[t]?.tempat || ''}" placeholder="Tempat / Media" class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm"><textarea oninput="updateCeramah(${t}, 'ringkasan', this.value)" placeholder="Ringkasan isi ceramah..." class="w-full p-3 border-2 border-gray-50 rounded-xl text-sm h-24">${window.ceramahData[t]?.ringkasan || ''}</textarea></div><button onclick="saveModuleData(${t})" class="w-full mt-4 py-3 bg-rose-600 text-white rounded-xl font-black shadow-lg">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
+            }
+        },
+
+        // Kode Sinkronisasi data ke Variabel Lokal
+        syncFromServer: function(record) {
+            let d = record.detail;
+            if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
+            if (record.kategori === 'Shalat Fardu') window.shalatData[record.tanggal] = d;
+            else if (record.kategori === 'Tarawih') window.tarawihData[record.tanggal] = d;
+            else if (record.kategori === 'Puasa') window.puasaData[record.tanggal] = d.status || d;
+            else if (record.kategori === 'Tadarus') window.tadarusData[record.tanggal] = d;
+            else if (record.kategori === 'Ceramah') window.ceramahData[record.tanggal] = d;
+        },
+
+        // Kode Tampilan Data di Rekap/Panel Guru
+        renderDetailDisplay: function(cat, data) {
+            let d = data;
+            if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
+            if (!d) return '-';
+            if (cat === 'Shalat Fardu') {
+                return `<div class="flex flex-wrap gap-1">${SYSTEM_CONFIG.PRAYER_ORDER.map(w => {
+                    const s = d[w] || '-';
+                    let cls = 'bg-slate-50 text-slate-400';
+                    if (s === 'berjamaah') cls = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+                    else if (s === 'munfarid') cls = 'bg-blue-50 text-blue-700 border-blue-100';
+                    else if (s === 'haid') cls = 'bg-purple-50 text-purple-700 border-purple-100';
+                    else if (s === 'tidak shalat') cls = 'bg-rose-50 text-rose-700 border-rose-100';
+                    return `<div class="flex-1 min-w-[70px] ${cls} p-1.5 rounded-lg border text-center text-[9px] font-bold shadow-sm"><span class="block text-[7px] uppercase mb-0.5 opacity-60">${w}</span>${s}</div>`;
+                }).join('')}</div>`;
+            }
+            if (cat === 'Tarawih') return `<div class="text-xs">Status: <b>${d.status || '-'}</b> | Lokasi: <b>${d.tempat || '-'}</b></div>`;
+            if (cat === 'Puasa') return `<b class="text-xs uppercase text-orange-600">${typeof d === 'string' ? d : d.status}</b>`;
+            if (cat === 'Tadarus') return `<div class="text-xs"><b>QS. ${d.surat || '-'}</b> (Ayat: ${d.ayat || '-'}), Metode: ${d.pilihan || '-'}</div>`;
+            if (cat === 'Ceramah') return `<div class="text-xs"><p class="font-bold">${d.penceramah || '-'}</p><p class="italic text-slate-500">"${d.ringkasan || '-'}"</p></div>`;
+            return JSON.stringify(d);
+        }
+    };
+
+    /**
+     * =========================================================================
+     * [SECTION 3] SISTEM INTI (CORE FRAMEWORK) - SISTEM LAMA TETAP
+     * =========================================================================
+     */
+    
+    function getSchoolId() {
+        const params = new URLSearchParams(window.location.search);
+        let id = params.get('id');
+        if (!id && window.location.href.includes('id=')) id = window.location.href.split('id=')[1].split('&')[0];
+        return id;
+    }
+
+    const SCHOOL_ID = getSchoolId();
+    let currentUser = JSON.parse(localStorage.getItem('ramadhanUser')) || null;
+    let currentTab = STUDENT_APP_MODULE.categories[0];
+    let registeredSchoolName = localStorage.getItem('registeredSchoolName') || "Sekolah";
+    let registeredAppName = localStorage.getItem('registeredAppName') || "Amalan Siswa";
+    let allRecords = [];
+
+    function isAdmin() { return currentUser && currentUser.nama === '*'; }
+    function showToast(m, s = true) {
+        const t = document.createElement('div');
+        t.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg text-white z-[100] font-bold ${s ? 'bg-emerald-600' : 'bg-rose-600'}`;
+        t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+    }
+
+    // --- ACTIONS ---
+    window.updateShalat = (t, w, s) => { window.shalatData[t][w] = s; STUDENT_APP_MODULE.renderForm(document.getElementById('contentArea'), currentTab); };
+    window.updateTarawih = (t, k, v) => { window.tarawihData[t][k] = v; STUDENT_APP_MODULE.renderForm(document.getElementById('contentArea'), currentTab); };
+    window.updatePuasa = (t, v) => { window.puasaData[t] = v; STUDENT_APP_MODULE.renderForm(document.getElementById('contentArea'), currentTab); };
+    window.updateTadarus = (t, k, v) => { window.tadarusData[t][k] = v; };
+    window.updateCeramah = (t, k, v) => { window.ceramahData[t][k] = v; };
+
+    // --- VIEWS ---
+    function renderRegistration() {
+        document.getElementById('app').innerHTML = `
+            <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
+                <div class="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md">
+                    <div class="text-center mb-8"><h1 class="text-3xl font-black text-slate-800">Daftar Sekolah</h1><p class="text-slate-400 text-sm mt-2">Buat database mandiri secara otomatis.</p></div>
+                    <form id="regForm" class="space-y-4">
+                        <input type="email" id="regEmail" placeholder="Email Guru (Admin)" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>
+                        <input type="text" id="regSchool" placeholder="Nama Sekolah (Misal: SMPN 1 TES)" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>
+                        <input type="text" id="regAppName" placeholder="Nama Aplikasi (Misal: Amalan Siswa)" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>
+                        <button type="submit" id="regBtn" class="w-full bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-lg">Daftar & Buat Database</button>
+                    </form>
+                    <div id="regResult" class="mt-8 hidden p-6 bg-slate-900 rounded-3xl text-white">
+                        <p class="text-[10px] font-bold text-emerald-400 uppercase mb-2">Link Akses Anda:</p>
+                        <textarea id="shareLink" class="w-full p-3 text-[11px] font-mono border rounded-xl bg-slate-800 border-slate-700 h-24 mb-3" readonly></textarea>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="downloadLink()" class="py-3 bg-blue-600 text-white rounded-xl font-bold pulse-blue shadow-lg text-xs">Unduh Link</button>
+                            <button onclick="copyLink()" class="py-3 bg-emerald-600 text-white rounded-xl font-bold pulse-green shadow-lg text-xs">Salin Link</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        document.getElementById('regForm').onsubmit = async (e) => {
+            e.preventDefault(); const btn = document.getElementById('regBtn'); btn.disabled = true; btn.textContent = "Memproses...";
+            const schoolNameInput = document.getElementById('regSchool').value;
+            const appNameInput = document.getElementById('regAppName').value;
+            try {
+                const res = await fetch(SYSTEM_CONFIG.GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'registerTeacher', email: document.getElementById('regEmail').value, nama_sekolah: schoolNameInput, nama_aplikasi: appNameInput })});
+                const data = await res.json();
+                if (data.ss_id) {
+                    localStorage.setItem('registeredSchoolName', schoolNameInput);
+                    localStorage.setItem('registeredAppName', appNameInput);
+                    document.getElementById('regResult').classList.remove('hidden');
+                    document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
+                    btn.textContent = "Berhasil!";
+                }
+            } catch (err) { btn.disabled = false; btn.textContent = "Coba Lagi"; }
+        };
+    }
+
+    window.copyLink = () => {
+        const text = document.getElementById('shareLink').value;
+        const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast("Link disalin!");
+    };
+
+    window.downloadLink = () => {
+        const link = document.getElementById('shareLink').value;
+        const textContent = `INFO AKSES APLIKASI: ${registeredAppName}\nSEKOLAH: ${registeredSchoolName}\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Kelas : Pilih Kelas Anda\n4. Klik Masuk.`;
+        const blob = new Blob([textContent], { type: 'text/plain' }); const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'instruksi_akses.txt'; a.click(); window.URL.revokeObjectURL(url); showToast("Instruksi diunduh!");
+    };
+
+    async function fetchSchoolInfo() {
+        if (!SCHOOL_ID) return;
+        try {
+            const res = await fetch(`${SYSTEM_CONFIG.GOOGLE_SCRIPT_URL}?action=getSchoolInfo&ss_id=${SCHOOL_ID}`);
+            const result = await res.json();
+            if (result.status === 'success') {
+                registeredSchoolName = result.nama_sekolah || "Sekolah";
+                registeredAppName = result.nama_aplikasi || "Amalan Siswa";
+                localStorage.setItem('registeredSchoolName', registeredSchoolName);
+                localStorage.setItem('registeredAppName', registeredAppName);
+            }
+        } catch (e) {}
+    }
+
+    function renderLogin() {
+        let classOptions = `<option value="">Pilih Kelas</option>`;
+        ['7','8','9'].forEach(g => { classOptions += `<optgroup label="Kelas ${g}">`; ['A','B','C','D','E','F','G','H','I','J'].forEach(s => { classOptions += `<option value="${g}${s}">${g}${s}</option>`; }); classOptions += `</optgroup>`; });
+        document.getElementById('app').innerHTML = `
+            <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
+                <div class="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md">
+                    <h1 class="text-2xl font-black text-center text-emerald-700 mb-2">${registeredAppName}</h1>
+                    <h2 class="text-xl font-bold text-center text-slate-800 mb-4">${registeredSchoolName}</h2>
+                    <form id="loginForm" class="space-y-4">
+                        <div><label class="block mb-1 font-semibold text-gray-700 text-sm">Nama Lengkap Siswa</label><input type="text" id="nama" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required></div>
+                        <div><label class="block mb-1 font-semibold text-gray-700 text-sm">Kelas</label><select id="kelas" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>${classOptions}</select></div>
+                        <p class="text-[10px] text-slate-400 text-center">* Masukkan Nama "*" (bintang) untuk masuk sebagai Guru.</p>
+                        <button type="submit" class="w-full bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-lg active:scale-95">Masuk Sekarang</button>
+                    </form>
+                </div>
+            </div>`;
+        document.getElementById('loginForm').onsubmit = (e) => {
+            e.preventDefault(); currentUser = { nama: document.getElementById('nama').value.trim(), kelas: document.getElementById('kelas').value };
+            localStorage.setItem('ramadhanUser', JSON.stringify(currentUser));
+            STUDENT_APP_MODULE.initLocalState();
+            if (isAdmin()) { renderAdmin(); fetchAllDataForAdmin(); } else { renderMainApp(); syncWithCloud(); }
+        };
+    }
+
+    function renderMainApp() {
+        if (!currentUser) return renderLogin();
+        document.getElementById('app').innerHTML = `
+            <div class="w-full h-full bg-emerald-600 overflow-auto">
+                <div class="max-w-4xl mx-auto p-4 pb-24">
+                    <div class="bg-white rounded-2xl p-6 mb-6 shadow-xl text-center md:text-left">
+                        <h1 class="font-black text-xl text-emerald-800">${registeredAppName}</h1>
+                        <p class="font-bold text-slate-500 text-sm mb-4">${registeredSchoolName}</p>
+                        <div class="mb-4 text-[10px] font-bold text-slate-400 uppercase flex flex-wrap justify-center md:justify-start gap-4 border-t pt-4"><span>👤 ${currentUser.nama}</span><span>🏫 ${currentUser.kelas}</span></div>
+                        <div class="flex gap-2">
+                            <button onclick="showRekapPage()" class="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs">📊 Rekap Saya</button>
+                            <button onclick="logout()" class="px-4 py-2 bg-red-500 text-white rounded-xl font-bold text-xs">Keluar</button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg mb-6 sticky top-0 z-40 flex overflow-x-auto no-scrollbar">
+                        ${STUDENT_APP_MODULE.categories.map(cat => `<button onclick="setTab('${cat}')" class="tab-button flex-1 px-4 py-4 font-black text-[10px] uppercase whitespace-nowrap ${currentTab === cat ? 'active' : 'text-slate-400'}">${cat}</button>`).join('')}
+                    </div>
+                    <div id="contentArea" class="bg-white rounded-3xl p-6 min-h-[400px]"></div>
+                </div>
+            </div>`;
+        STUDENT_APP_MODULE.renderForm(document.getElementById('contentArea'), currentTab);
+    }
+
+    window.setTab = (t) => { currentTab = t; renderMainApp(); };
+
+    // --- SAVE & SYNC ---
+    async function handleSavePrayer(tgl, wkt) {
+        if (!SCHOOL_ID) return; const val = window.shalatData[tgl]?.[wkt]; if (!val) return showToast("Pilih status!", false);
+        showToast(`Simpan ${wkt}...`);
+        const rec = { ss_id: SCHOOL_ID, nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: JSON.stringify(window.shalatData[tgl]) };
+        try { await fetch(SYSTEM_CONFIG.GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(rec) }); showToast(`${wkt} Tersimpan!`); } catch(e) {}
+    }
+
+    async function saveModuleData(tgl) {
+        if (!SCHOOL_ID) return;
+        let detail = "";
+        if (currentTab === 'Tarawih') { if (!window.tarawihData[tgl].status || !window.tarawihData[tgl].tempat) return showToast("Lengkapi data!", false); detail = JSON.stringify(window.tarawihData[tgl]); }
+        else if (currentTab === 'Puasa') { if (!window.puasaData[tgl]) return showToast("Pilih status!", false); detail = JSON.stringify(window.puasaData[tgl]); }
+        else if (currentTab === 'Tadarus') { if (!window.tadarusData[tgl].surat || !window.tadarusData[tgl].ayat) return showToast("Lengkapi data!", false); detail = JSON.stringify(window.tadarusData[tgl]); }
+        else if (currentTab === 'Ceramah') { if (!window.ceramahData[tgl].ringkasan) return showToast("Lengkapi data!", false); detail = JSON.stringify(window.ceramahData[tgl]); }
+        showToast("Menyimpan...");
+        const rec = { ss_id: SCHOOL_ID, nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detail };
+        try { await fetch(SYSTEM_CONFIG.GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(rec) }); showToast("Tersimpan!"); } catch(e) {}
+    }
+
+    async function syncWithCloud() {
+        if (!SCHOOL_ID || isAdmin()) return;
+        try {
+            const res = await fetch(`${SYSTEM_CONFIG.GOOGLE_SCRIPT_URL}?action=read&ss_id=${SCHOOL_ID}&nama=${currentUser.nama}&kelas=${currentUser.kelas}`);
+            const result = await res.json();
+            if (result.status === 'success') {
+                result.data.forEach(item => STUDENT_APP_MODULE.syncFromServer(item));
+                STUDENT_APP_MODULE.renderForm(document.getElementById('contentArea'), currentTab);
+                allRecords = result.data;
+            }
+        } catch (e) {}
+    }
+
+    // --- REKAP & ADMIN VIEW ---
+    window.showRekapPage = async () => {
+        showToast("Muat rekap...");
+        try {
+            const res = await fetch(`${SYSTEM_CONFIG.GOOGLE_SCRIPT_URL}?action=read&ss_id=${SCHOOL_ID}&nama=${currentUser.nama}&kelas=${currentUser.kelas}`);
+            const result = await res.json();
+            const items = result.data || [];
+            document.getElementById('app').innerHTML = `
+                <div class="bg-slate-50 p-6 overflow-auto h-full pb-20"><div class="max-w-4xl mx-auto">
+                    <div class="bg-white p-6 rounded-3xl mb-8 flex justify-between items-center shadow-md"><div><h1 class="font-black text-2xl">Rekap Saya</h1></div><button onclick="renderMainApp()" class="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold">KEMBALI</button></div>
+                    ${STUDENT_APP_MODULE.categories.map(cat => {
+                        const recs = items.filter(r => r.kategori === cat).sort((a,b) => a.tanggal - b.tanggal);
+                        return `<div class="bg-white rounded-2xl border mb-6 overflow-hidden"><div class="p-4 bg-emerald-50 font-black uppercase text-[10px] tracking-tight text-emerald-900">${cat}</div><div class="divide-y">${recs.map(r => `<div class="p-4 flex gap-4"><div class="bg-slate-50 p-2 rounded-xl text-center min-w-[50px]"><span class="block text-[8px] font-bold">HARI</span><span class="block font-black text-slate-800">${r.tanggal}</span></div><div class="flex-1">${STUDENT_APP_MODULE.renderDetailDisplay(cat, r.detail)}</div></div>`).join('')}</div></div>`;
+                    }).join('')}
+                </div></div>`;
+        } catch(e) {}
+    };
+
+    function renderAdmin() {
+        document.getElementById('app').innerHTML = `
+            <div class="bg-slate-100 p-6 overflow-auto h-full"><div class="max-w-6xl mx-auto">
+                <div class="bg-white p-6 rounded-3xl mb-6 flex flex-col md:flex-row justify-between items-center shadow-md gap-4"><h1 class="font-black text-2xl">PANEL GURU</h1><div class="flex gap-2"><button onclick="fetchAllDataForAdmin()" class="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs">REFRESH DATA</button><button onclick="logout()" class="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs">KELUAR</button></div></div>
+                <div id="studentGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </div></div>`;
+    }
+
+    async function fetchAllDataForAdmin() {
+        try {
+            const res = await fetch(`${SYSTEM_CONFIG.GOOGLE_SCRIPT_URL}?action=readAll&ss_id=${SCHOOL_ID}`);
+            const result = await res.json();
+            if (result.status === 'success') {
+                allRecords = result.data; const unique = [...new Set(allRecords.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s));
+                document.getElementById('studentGrid').innerHTML = unique.map(s => `<div onclick="showStudentDetail('${s.nama}', '${s.kelas}')" class="bg-white p-5 rounded-3xl border hover:border-emerald-500 cursor-pointer shadow-sm"><h3 class="font-black">${s.nama}</h3><p class="text-xs font-bold text-emerald-600">${s.kelas}</p></div>`).join('');
+            }
+        } catch (e) {}
+    }
+
+    function showStudentDetail(nama, kelas) {
+        const items = allRecords.filter(r => r.nama === nama && r.kelas === kelas);
+        document.getElementById('app').innerHTML = `
+            <div class="bg-slate-50 p-6 overflow-auto h-full pb-20"><div class="max-w-4xl mx-auto">
+                <div class="bg-white p-6 rounded-3xl mb-6 flex justify-between items-center shadow-md"><div><h2 class="font-black text-xl">${nama}</h2><p class="text-xs text-emerald-600">Kelas: ${kelas}</p></div><button onclick="renderAdmin(); fetchAllDataForAdmin();" class="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs">KEMBALI</button></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    ${STUDENT_APP_MODULE.categories.map(cat => `<div class="bg-white p-6 rounded-3xl border shadow-sm"><h3 class="font-black text-[10px] uppercase text-slate-400 mb-4 border-b pb-2 tracking-widest">${cat}</h3><div class="space-y-4">${items.filter(r => r.kategori === cat).map(r => `<div class="p-3 bg-slate-50 rounded-xl text-[10px] border border-slate-100"><b>Hari ke-${r.tanggal}:</b><br><div class="mt-1">${STUDENT_APP_MODULE.renderDetailDisplay(cat, r.detail)}</div></div>`).join('')}</div></div>`).join('')}
+                </div>
+            </div></div>`;
+    }
+
+    function logout() { localStorage.clear(); location.reload(); }
+    
+    async function init() { 
+        if (!SCHOOL_ID) {
+            renderRegistration(); 
+        } else {
+            await fetchSchoolInfo(); 
+            if (!currentUser) renderLogin(); 
+            else if (isAdmin()) { renderAdmin(); fetchAllDataForAdmin(); } 
+            else { renderMainApp(); syncWithCloud(); }
+        }
+    }
+    init();
+  </script>
+ </body>
+</html>
