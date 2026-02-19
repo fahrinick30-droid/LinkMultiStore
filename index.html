@@ -65,7 +65,6 @@
   <script>
         /**
          * KONFIGURASI SISTEM MULTI-SCHOOL
-         * Script URL Apps Script untuk database terpusat
          */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
         const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
@@ -123,6 +122,11 @@
         function safeSetStorage(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
         function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch (e) {} }
         
+        // Kunci penyimpanan yang spesifik per sekolah
+        function getLocalUserKey() {
+            return SCHOOL_ID ? `ramadhanUser_${SCHOOL_ID}` : 'ramadhanUser_default';
+        }
+
         function loadAllRecords() {
             const saved = safeGetStorage('ramadhanAllRecords');
             if (saved) { try { allRecords = JSON.parse(saved); } catch(e) {} }
@@ -131,7 +135,8 @@
 
         function getUserStateKey() {
             if (!currentUser) return null;
-            return `ramadhanState_${currentUser.nama_lengkap.replace(/\s+/g, '_')}_${currentUser.kelas}`;
+            const prefix = SCHOOL_ID ? `${SCHOOL_ID}_` : '';
+            return `${prefix}ramadhanState_${currentUser.nama_lengkap.replace(/\s+/g, '_')}_${currentUser.kelas}`;
         }
 
         function loadUserState() {
@@ -193,7 +198,7 @@
 
         function handleLogout() {
             showConfirmDialog("Apakah Anda yakin ingin keluar?", () => {
-                safeRemoveStorage('ramadhanUser');
+                safeRemoveStorage(getLocalUserKey());
                 currentUser = null;
                 showLoginPage();
                 showToast("Berhasil keluar.");
@@ -382,7 +387,7 @@
                 if (!admin && (!nama || !kelas)) return showToast("Mohon isi nama dan kelas", false);
                 
                 currentUser = { nama_lengkap: nama, kelas: admin ? '*' : kelas, password: admin ? '*' : '' };
-                safeSetStorage('ramadhanUser', JSON.stringify(currentUser));
+                safeSetStorage(getLocalUserKey(), JSON.stringify(currentUser));
                 loadUserState();
                 if (!admin) syncUserFromCloud();
                 showAmalanPage();
@@ -631,22 +636,23 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         
-        function renderDetailData(k, d) {
+        function renderDetailData(cat, d) {
             try { d = typeof d === 'string' ? JSON.parse(d) : d; } catch (e) {}
             if (!d) return '-'; 
-            if (k === 'Shalat Fardu') {
+            if (cat === 'Shalat Fardu') {
                 const keys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
                 return keys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`).join(' | ') || '-';
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Tempat: <b>${d.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Media: <b>${d.tempat || '-'}</b><br><span class="text-[10px] text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
+            } else if (cat === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Tempat: <b>${d.tempat || '-'}</b>`;
+            else if (cat === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
+            else if (cat === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
+            else if (cat === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Media: <b>${d.tempat || '-'}</b><br><span class="text-[10px] text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
             return JSON.stringify(d);
         }
 
         async function init() { 
             loadAllRecords(); 
-            const saved = safeGetStorage('ramadhanUser'); 
+            // Mengambil user dari penyimpanan yang spesifik per sekolah
+            const saved = safeGetStorage(getLocalUserKey()); 
             if (!SCHOOL_ID) {
                 renderRegistration();
             } else {
