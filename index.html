@@ -86,6 +86,9 @@
         const defaultConfig = {
             app_title: "Amalan Ramadhan Siswa",
             welcome_message: "Selamat datang di aplikasi Amalan Ramadhan",
+            label_nama: "Nama Lengkap Siswa",
+            label_kelas: "Kelas",
+            label_pilih_kelas: "Pilih Kelas",
             background_color: "#10b981",
             surface_color: "#ffffff",
             text_color: "#1f2937",
@@ -118,11 +121,17 @@
         }
         initDefaultData();
 
-        function safeGetStorage(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+        function safeGetStorage(key) { 
+            try { 
+                const val = localStorage.getItem(key);
+                // Cegah teks "undefined" atau "null" dalam bentuk string muncul di UI
+                if (val === "undefined" || val === "null" || !val) return null;
+                return val;
+            } catch (e) { return null; } 
+        }
         function safeSetStorage(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
         function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch (e) {} }
         
-        // Kunci penyimpanan yang spesifik per sekolah
         function getLocalUserKey() {
             return SCHOOL_ID ? `ramadhanUser_${SCHOOL_ID}` : 'ramadhanUser_default';
         }
@@ -357,23 +366,35 @@
 
         function showLoginPage() {
             const config = window.elementSdk?.config || defaultConfig;
-            let classOptions = `<option value="">Pilih Kelas</option>`;
+            const lastNama = safeGetStorage('last_nama') || '';
+            const lastKelas = safeGetStorage('last_kelas') || '';
+            
+            let classOptions = `<option value="">${config.label_pilih_kelas || "Pilih Kelas"}</option>`;
             ['7','8','9'].forEach(g => {
                 classOptions += `<optgroup label="Kelas ${g}">`;
                 ['A','B','C','D','E','F','G','H','I','J'].forEach(s => {
                     const c = `${g}${s}`;
-                    classOptions += `<option value="${c}">${c}</option>`;
+                    // Perbaiki logika selected: bandingkan dengan lastKelas, bukan lastNama
+                    const isSelected = c === lastKelas ? 'selected' : '';
+                    classOptions += `<option value="${c}" ${isSelected}>${c}</option>`;
                 });
                 classOptions += `</optgroup>`;
             });
+
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4" style="background: ${config.background_color};">
                     <div class="w-full max-w-md rounded-2xl shadow-2xl p-8 bg-white">
-                        <h1 class="text-center font-bold text-3xl mb-2 text-emerald-700">${config.app_title}</h1>
-                        <p class="text-center text-sm mb-8 text-gray-500">${config.welcome_message}</p>
+                        <h1 class="text-center font-bold text-3xl mb-2 text-emerald-700">${config.app_title || "Amalan Ramadhan"}</h1>
+                        <p class="text-center text-sm mb-8 text-gray-500">${config.welcome_message || "Silahkan masuk"}</p>
                         <form id="loginForm" class="space-y-4">
-                            <div><label class="block mb-1 font-semibold text-gray-700">Nama Lengkap Siswa</label><input type="text" id="nama" class="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"></div>
-                            <div><label class="block mb-1 font-semibold text-gray-700">Kelas</label><select id="kelas" class="w-full px-4 py-2 border rounded-xl bg-white outline-none focus:ring-2 focus:ring-emerald-500">${classOptions}</select></div>
+                            <div>
+                                <label class="block mb-1 font-semibold text-gray-700">${config.label_nama || "Nama Lengkap Siswa"}</label>
+                                <input type="text" id="nama" value="${lastNama}" class="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block mb-1 font-semibold text-gray-700">${config.label_kelas || "Kelas"}</label>
+                                <select id="kelas" class="w-full px-4 py-2 border rounded-xl bg-white outline-none focus:ring-2 focus:ring-emerald-500">${classOptions}</select>
+                            </div>
                             <button type="submit" class="w-full py-3 rounded-xl text-white font-bold bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg active:scale-95">Masuk Sekarang</button>
                         </form>
                     </div>
@@ -386,6 +407,11 @@
                 const admin = nama === '*';
                 if (!admin && (!nama || !kelas)) return showToast("Mohon isi nama dan kelas", false);
                 
+                if (!admin) {
+                    safeSetStorage('last_nama', nama);
+                    safeSetStorage('last_kelas', kelas);
+                }
+
                 currentUser = { nama_lengkap: nama, kelas: admin ? '*' : kelas, password: admin ? '*' : '' };
                 safeSetStorage(getLocalUserKey(), JSON.stringify(currentUser));
                 loadUserState();
@@ -402,7 +428,7 @@
                 <div class="w-full h-full overflow-auto" style="background: ${config.background_color};">
                     <div class="max-w-4xl mx-auto p-4 md:p-6 pb-24">
                         <div class="rounded-2xl shadow-xl p-6 mb-6 bg-white">
-                            <h1 class="font-bold text-2xl mb-4 text-emerald-800">${config.app_title}</h1>
+                            <h1 class="font-bold text-2xl mb-4 text-emerald-800">${config.app_title || "Amalan Ramadhan"}</h1>
                             <div class="mb-6 bg-emerald-50 p-4 rounded-xl text-sm border border-emerald-100">
                                 <p class="mb-1 text-emerald-900"><strong>👤 Nama:</strong> ${currentUser.nama_lengkap}</p>
                                 <p class="text-emerald-900"><strong>🏫 Kelas:</strong> ${currentUser.kelas}</p>
@@ -651,7 +677,6 @@
 
         async function init() { 
             loadAllRecords(); 
-            // Mengambil user dari penyimpanan yang spesifik per sekolah
             const saved = safeGetStorage(getLocalUserKey()); 
             if (!SCHOOL_ID) {
                 renderRegistration();
