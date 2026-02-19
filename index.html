@@ -589,7 +589,7 @@
                 <table><thead><tr><th>No</th><th>Nama Siswa</th><th>Kelas</th><th>Total Data</th><th>Status</th></tr></thead><tbody>`;
             
             students.forEach((s, idx) => {
-                const count = allRecords.filter(r => r.nama === s.nama && r.kelas === s.kelas).length;
+                const count = allMerged.filter(r => r.nama === s.nama && r.kelas === s.kelas).length;
                 html += `<tr><td>${idx+1}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${count}</td><td>${count > 0 ? 'Aktif' : 'Belum Ada'}</td></tr>`;
             });
 
