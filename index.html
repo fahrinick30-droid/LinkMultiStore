@@ -124,7 +124,6 @@
         function safeGetStorage(key) { 
             try { 
                 const val = localStorage.getItem(key);
-                // Cegah teks "undefined" atau "null" dalam bentuk string muncul di UI
                 if (val === "undefined" || val === "null" || !val) return null;
                 return val;
             } catch (e) { return null; } 
@@ -296,12 +295,13 @@
 
         window.downloadLink = () => {
             const link = document.getElementById('shareLink').value;
-            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Kelas : Pilih Kelas\n4. Klik Masuk.\n\nPanel Guru digunakan untuk rekap amalan dan cetak laporan otomatis.`;
+            // Menghilangkan baris "Kelas : Pilih Kelas" dan menyesuaikan penomoran
+            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Klik Masuk.\n\nPanel Guru digunakan untuk rekap amalan dan cetak laporan otomatis.`;
             const blob = new Blob([textContent], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'instruksi_akses.txt';
+            a.download = 'instruksi_akses_guru.txt';
             a.click();
             window.URL.revokeObjectURL(url);
             showToast("Instruksi diunduh!");
@@ -374,7 +374,6 @@
                 classOptions += `<optgroup label="Kelas ${g}">`;
                 ['A','B','C','D','E','F','G','H','I','J'].forEach(s => {
                     const c = `${g}${s}`;
-                    // Perbaiki logika selected: bandingkan dengan lastKelas, bukan lastNama
                     const isSelected = c === lastKelas ? 'selected' : '';
                     classOptions += `<option value="${c}" ${isSelected}>${c}</option>`;
                 });
@@ -492,7 +491,7 @@
                 area.querySelectorAll('.ps-s').forEach(b => b.onclick = (e) => { puasaData[e.target.dataset.t] = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Tadarus') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Simakan'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-10" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-10" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.td-m').forEach(b => b.onclick = (e) => { tadarusData[e.target.dataset.t].pilihan = e.target.dataset.m; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
@@ -670,7 +669,7 @@
                 return keys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`).join(' | ') || '-';
             } else if (cat === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Tempat: <b>${d.tempat || '-'}</b>`;
             else if (cat === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
-            else if (cat === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
+            else if (cat === 'Tadarus') return `Metode: <b>${d.pilihan === 'ustadz' ? 'Bersama Ustadz' : (d.pilihan || '-')}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
             else if (cat === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Media: <b>${d.tempat || '-'}</b><br><span class="text-[10px] text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
             return JSON.stringify(d);
         }
