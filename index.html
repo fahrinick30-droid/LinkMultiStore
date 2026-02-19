@@ -376,7 +376,8 @@
         }
 
         function showLoginPage() {
-            const config = window.elementSdk?.config || defaultConfig;
+            // PERBAIKAN: Menggabungkan config default dengan config yang mungkin belum ada
+            const config = { ...defaultConfig, ...(window.elementSdk?.config || {}) };
             const lastNama = safeGetStorage('last_nama') || '';
             const lastKelas = safeGetStorage('last_kelas') || '';
             const schoolName = getSchoolName();
@@ -426,7 +427,8 @@
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
             if (isAdmin()) return (showLaporanPage(), fetchAllDataForAdmin());
-            const config = window.elementSdk?.config || defaultConfig;
+            // PERBAIKAN: Menggabungkan config default dengan config yang mungkin belum ada
+            const config = { ...defaultConfig, ...(window.elementSdk?.config || {}) };
             const schoolName = getSchoolName();
 
             document.getElementById('app').innerHTML = `
@@ -498,7 +500,7 @@
                 area.querySelectorAll('.ps-s').forEach(b => b.onclick = (e) => { puasaData[e.target.dataset.t] = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Tadarus') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Simakan Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">NAMA SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-20" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Simakan Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">NAMA SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="QS. Al Fatihah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-7" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.td-m').forEach(b => b.onclick = (e) => { tadarusData[e.target.dataset.t].pilihan = e.target.dataset.m; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
