@@ -303,7 +303,6 @@
 
         window.downloadLink = () => {
             const link = document.getElementById('shareLink').value;
-            // PERBAIKAN: Menghapus instruksi pilih kelas
             const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Klik Masuk.\n\nGunakan Panel Guru untuk memantau rekap amalan dan mencetak laporan siswa secara otomatis.`;
             const blob = new Blob([textContent], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
@@ -329,7 +328,14 @@
                         const tgl = item.tanggal;
                         const cat = item.kategori;
                         let detail = item.detail || item.hadir;
-                        if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
+                        
+                        // FIX: Handle double-stringified JSON
+                        if (typeof detail === 'string') { 
+                            try { 
+                                const parsed = JSON.parse(detail); 
+                                detail = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
+                            } catch(e) {} 
+                        }
                         
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
@@ -790,20 +796,45 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         
-        function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        // PERBAIKAN: Fungsi parsing yang lebih kuat untuk menangani JSON ganda
+        function parseRecordData(d) { 
+            if (!d) return null;
+            if (typeof d === 'object') return d;
+            try { 
+                const parsed = JSON.parse(d);
+                // Jika hasil parse masih string, coba parse lagi (untuk double-stringified JSON)
+                if (typeof parsed === 'string') {
+                    return JSON.parse(parsed);
+                }
+                return parsed;
+            } catch (e) { 
+                return d; // Kembalikan string asli jika gagal parse
+            } 
+        }
         
         function renderDetailData(k, d) {
             d = parseRecordData(d);
+            
             if (!d) return '-'; 
+            
             if (k === 'Shalat Fardu') {
                 if (typeof d !== 'object') return d;
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
                 const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
                 return entries.length ? entries.join(' | ') : '-';
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
+            } else if (k === 'Tarawih') {
+                if (typeof d !== 'object') return `Status: <b>${d}</b>`;
+                return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
+            } else if (k === 'Puasa') {
+                return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
+            } else if (k === 'Tadarus') {
+                if (typeof d !== 'object') return d;
+                return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
+            } else if (k === 'Ceramah') {
+                if (typeof d !== 'object') return d;
+                return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
+            }
+            
             return JSON.stringify(d);
         }
 
