@@ -8,18 +8,8 @@
   <script>
     // Error Handler Global
     window.onerror = function(msg, url, line, col, error) {
-        const app = document.getElementById('app');
-        if (app) {
-            app.innerHTML = `
-                <div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">
-                    <h3>Terjadi Kesalahan Aplikasi</h3>
-                    <p>${msg}</p>
-                    <button onclick="localStorage.clear(); location.reload();" style="margin-top:10px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Reset & Reload Aplikasi
-                    </button>
-                </div>
-            `;
-        }
+        // Silent error agar tidak mengganggu user, cek console jika perlu
+        console.error(msg, error);
         return false;
     };
 
@@ -44,32 +34,14 @@
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-        
-        /* Animasi */
-        @keyframes pulseBlue {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
-          70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
-        }
-        @keyframes pulseGreen {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-          70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        .pulse-blue { animation: pulseBlue 2s infinite; }
-        .pulse-green { animation: pulseGreen 2s infinite; }
     </style>
  </head>
  <body class="h-full bg-gray-50">
   <div id="app" class="w-full h-full overflow-auto"></div>
   <script>
-        /**
-         * KONFIGURASI SISTEM LAMA (MULTI-SCHOOL)
-         */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
         const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
-        // Logika ID Sekolah (Sistem Lama)
         function getSchoolId() {
             const params = new URLSearchParams(window.location.search);
             let id = params.get('id');
@@ -84,7 +56,6 @@
 
         let SCHOOL_ID = getSchoolId();
 
-        // Helper untuk mengambil nama sekolah
         function getSchoolName() {
             if (!SCHOOL_ID) return "";
             return localStorage.getItem('school_name_' + SCHOOL_ID) || "";
@@ -137,7 +108,6 @@
 
         function getUserStateKey() {
             if (!currentUser) return null;
-            // PENTING: Gunakan 'nama' agar konsisten dengan data lama
             return `ramadhanState_${currentUser.nama.replace(/\s+/g, '_')}_${currentUser.kelas}`;
         }
 
@@ -209,7 +179,7 @@
 
         function isAdmin() { return currentUser && currentUser.nama === '*'; }
 
-        // --- SISTEM LAMA: REGISTRASI SEKOLAH ---
+        // --- SISTEM REGISTRASI SEKOLAH ---
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -227,8 +197,8 @@
                             <p class="text-[10px] font-bold text-emerald-400 uppercase mb-2">Link Siswa Anda:</p>
                             <textarea id="shareLink" class="w-full p-3 text-[11px] font-mono border rounded-xl bg-slate-800 border-slate-700 h-24 mb-3" readonly></textarea>
                             <div class="grid grid-cols-2 gap-3 mb-3">
-                                <button onclick="downloadLink()" class="py-3 bg-blue-600 text-white rounded-xl font-bold pulse-blue shadow-lg text-xs">Unduh Link</button>
-                                <button onclick="copyLink()" class="py-3 bg-emerald-600 text-white rounded-xl font-bold pulse-green shadow-lg text-xs">Salin Link</button>
+                                <button onclick="downloadLink()" class="py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 text-xs">Unduh Link</button>
+                                <button onclick="copyLink()" class="py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-xs">Salin Link</button>
                             </div>
                             <button onclick="exitApp()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold shadow-lg border border-slate-600">SELESAI</button>
                         </div>
@@ -263,10 +233,7 @@
                     if (data.ss_id) {
                         localHistory.push({ email: emailInput, school: schoolInput });
                         localStorage.setItem('reg_history', JSON.stringify(localHistory));
-                        
-                        // SIMPAN NAMA SEKOLAH DI LOCAL STORAGE
                         localStorage.setItem('school_name_' + data.ss_id, schoolInput);
-
                         document.getElementById('regResult').classList.remove('hidden');
                         sessionStorage.setItem('current_school_id', data.ss_id);
                         document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
@@ -312,6 +279,27 @@
             showToast("Link & Instruksi diunduh!");
         };
 
+        // --- SINKRONISASI DATA ---
+        
+        // PERBAIKAN: Fungsi parsing yang bisa menangani JSON ganda dan object
+        function parseRecordData(d) { 
+            if (!d) return null;
+            if (typeof d === 'object') return d;
+            
+            try { 
+                // Coba parse pertama
+                let parsed = JSON.parse(d);
+                // Jika hasil parse masih string, berarti kena double stringify, parse lagi
+                if (typeof parsed === 'string') {
+                    return JSON.parse(parsed);
+                }
+                return parsed;
+            } catch (e) { 
+                // Jika gagal parse (berarti string biasa), kembalikan as-is
+                return d; 
+            } 
+        }
+
         async function syncUserFromCloud() {
             if (!currentUser || isAdmin() || !SCHOOL_ID) return;
             try {
@@ -323,26 +311,43 @@
                 
                 const response = await fetch(url);
                 const result = await response.json();
+                
                 if (result.status === 'success' && Array.isArray(result.data)) {
+                    // PERBAIKAN: Perbarui allRecords agar Rekap Saya tidak kosong
+                    // Kita akan map data dari cloud ke format allRecords local
+                    const cloudRecords = result.data.map(item => ({
+                        nama: currentUser.nama,
+                        kelas: currentUser.kelas,
+                        kategori: item.kategori,
+                        tanggal: item.tanggal,
+                        hadir: item.detail || item.hadir // Fallback untuk nama field
+                    }));
+
+                    // Gabungkan dengan data lokal (Cloud menang jika tanggal sama)
+                    // Hapus data lokal yang tanggal & kategorinya ada di cloud
+                    allRecords = allRecords.filter(local => 
+                        !cloudRecords.some(cloud => 
+                            cloud.kategori === local.kategori && cloud.tanggal == local.tanggal
+                        )
+                    );
+                    
+                    // Masukkan data cloud
+                    allRecords = [...allRecords, ...cloudRecords];
+                    saveAllRecords(); // Simpan ke local storage
+
+                    // Update form state (Inputan)
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
                         const cat = item.kategori;
-                        let detail = item.detail || item.hadir;
+                        let detail = parseRecordData(item.detail || item.hadir);
                         
-                        // FIX: Handle double-stringified JSON
-                        if (typeof detail === 'string') { 
-                            try { 
-                                const parsed = JSON.parse(detail); 
-                                detail = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
-                            } catch(e) {} 
-                        }
-                        
-                        if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
-                        else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
+                        if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...(typeof detail === 'object' ? detail : {}) };
+                        else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...(typeof detail === 'object' ? detail : {}) };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
-                        else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
-                        else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
+                        else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...(typeof detail === 'object' ? detail : {}) };
+                        else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...(typeof detail === 'object' ? detail : {}) };
                     });
+                    
                     saveUserState();
                     if (document.getElementById('contentArea')) renderContentArea();
                 }
@@ -371,8 +376,14 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
+                    // PERBAIKAN: Gunakan parseRecordData saat mapping agar format konsisten
+                    // Dan pastikan tidak menimpa dengan array kosong jika fetch gagal (sudah dihandle di blok catch)
                     allRecords = result.data.map(item => ({
-                        nama: item.nama, kelas: item.kelas, kategori: item.kategori, tanggal: item.tanggal, hadir: item.detail || item.hadir
+                        nama: item.nama, 
+                        kelas: item.kelas, 
+                        kategori: item.kategori, 
+                        tanggal: item.tanggal, 
+                        hadir: item.detail || item.hadir // Simpan raw, nanti diparse saat render
                     }));
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
@@ -383,7 +394,6 @@
         }
 
         function showLoginPage() {
-            // PERBAIKAN: Menggabungkan config default dengan config yang mungkin belum ada
             const config = { ...defaultConfig, ...(window.elementSdk?.config || {}) };
             const lastNama = safeGetStorage('last_nama') || '';
             const lastKelas = safeGetStorage('last_kelas') || '';
@@ -434,7 +444,6 @@
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
             if (isAdmin()) return (showLaporanPage(), fetchAllDataForAdmin());
-            // PERBAIKAN: Menggabungkan config default dengan config yang mungkin belum ada
             const config = { ...defaultConfig, ...(window.elementSdk?.config || {}) };
             const schoolName = getSchoolName();
 
@@ -796,22 +805,6 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         
-        // PERBAIKAN: Fungsi parsing yang lebih kuat untuk menangani JSON ganda
-        function parseRecordData(d) { 
-            if (!d) return null;
-            if (typeof d === 'object') return d;
-            try { 
-                const parsed = JSON.parse(d);
-                // Jika hasil parse masih string, coba parse lagi (untuk double-stringified JSON)
-                if (typeof parsed === 'string') {
-                    return JSON.parse(parsed);
-                }
-                return parsed;
-            } catch (e) { 
-                return d; // Kembalikan string asli jika gagal parse
-            } 
-        }
-        
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             
@@ -842,7 +835,6 @@
             loadAllRecords(); 
             const saved = safeGetStorage('ramadhanUser'); 
             
-            // Cek apakah sudah terdaftar (punya ID Sekolah)
             if (!SCHOOL_ID) {
                 renderRegistration();
             } else {
