@@ -61,7 +61,11 @@
             if (!id && window.location.href.includes('id=')) {
                 id = window.location.href.split('id=')[1].split('&')[0];
             }
-            return id || sessionStorage.getItem('current_school_id');
+            if (id) {
+                sessionStorage.setItem('current_school_id', id);
+                return id;
+            }
+            return sessionStorage.getItem('current_school_id');
         }
 
         let SCHOOL_ID = getSchoolId();
@@ -163,7 +167,7 @@
                         if (typeof incomingData === 'object' && incomingData !== null) {
                             Object.assign(existingData, incomingData);
                         } else {
-                            existingData['Info'] = incomingData;
+                            existingData['Catatan'] = incomingData;
                         }
                         existing.hadir = JSON.stringify(existingData);
                     } else {
@@ -213,6 +217,10 @@
                                 if (typeof data === 'object' && data !== null) tarawihData[tgl] = { ...tarawihData[tgl], ...data };
                             } else if (r.kategori === 'Puasa') {
                                 puasaData[tgl] = (typeof data === 'object' && data !== null ? data.status : data);
+                            } else if (r.kategori === 'Tadarus') {
+                                if (typeof data === 'object' && data !== null) tadarusData[tgl] = { ...tadarusData[tgl], ...data };
+                            } else if (r.kategori === 'Ceramah') {
+                                if (typeof data === 'object' && data !== null) ceramahData[tgl] = { ...ceramahData[tgl], ...data };
                             }
                         }
                     });
@@ -224,19 +232,17 @@
             } catch (e) { console.error("Sync Error:", e); }
         }
 
-        function getCategoryIconEmoji(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             if (!d) return '-';
             if (k === 'Shalat Fardu') {
                 if (typeof d !== 'object' || d === null) return `<b>${d}</b>`;
                 const ordered = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                const text = ordered
+                // FORMAT: Subuh: berjamaah Dzuhur: munfarid Ashar: berjamaah
+                return ordered
                     .filter(key => d[key])
-                    .map(key => `<span class="mr-2"><b>${key}:</b> ${d[key]}</span>`)
+                    .map(key => `<span class="mr-3 whitespace-nowrap"><b>${key}:</b> ${d[key]}</span>`)
                     .join(' ');
-                return text || '-';
             }
             if (k === 'Tarawih') return d.status ? `<b>${d.status}</b> di ${d.tempat || '-'}` : '-';
             if (k === 'Puasa') return typeof d === 'string' ? `<b>${d}</b>` : `<b>${d.status || '-'}</b>`;
@@ -245,9 +251,6 @@
             return typeof d === 'object' ? JSON.stringify(d) : d;
         }
 
-        /**
-         * SISTEM REGISTRASI SEKOLAH (THE MISSING FUNCTION)
-         */
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -295,7 +298,7 @@
                     }
                 } catch (err) { 
                     btn.disabled = false; btn.textContent = "Coba Lagi"; 
-                    showToast("Gagal mendaftar. Hubungi Admin.", false);
+                    showToast("Gagal mendaftar.", false);
                 }
             };
         }
@@ -303,8 +306,7 @@
         window.copyLink = () => {
             const text = document.getElementById('shareLink').value;
             const ta = document.createElement("textarea");
-            ta.value = text;
-            ta.style.position = 'fixed'; ta.style.opacity = '0';
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
             document.body.appendChild(ta); ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
@@ -313,7 +315,7 @@
 
         window.downloadLink = () => {
             const link = document.getElementById('shareLink').value;
-            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK UNTUK SISWA :\n${link}\n\nCARA MASUK PANEL GURU :\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap: * (tanda bintang)\n3. Pilih kelas apa saja.\n4. Klik Masuk.\n\nSelamat beribadah!`;
+            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK UNTUK SISWA :\n${link}\n\nCARA MASUK PANEL GURU :\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap: * (tanda bintang)\n3. Pilih kelas apa saja.\n4. Klik Masuk.`;
             const blob = new Blob([textContent], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -321,9 +323,6 @@
             showToast("Instruksi diunduh!");
         };
 
-        /**
-         * LOGIN & AMALAN UI
-         */
         function showLoginPage() {
             const config = defaultConfig;
             let classOptions = `<option value="">Pilih Kelas</option>`;
@@ -417,7 +416,7 @@
                         <div class="space-y-8">
                             ${['Subuh','Dzuhur','Ashar','Maghrib','Isya'].map(w => `
                                 <div class="pb-6 border-b border-gray-50 last:border-0">
-                                    <p class="font-black text-gray-400 text-[11px] uppercase tracking-widest mb-4 flex items-center gap-2">SHALAT ${w}</p>
+                                    <p class="font-black text-gray-400 text-[11px] uppercase tracking-widest mb-4">SHALAT ${w}</p>
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                         ${['berjamaah','munfarid','haid','tidak shalat'].map(s => `
                                             <button class="sh-btn px-2 py-4 text-[10px] rounded-2xl border-2 font-black transition-all ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]' : 'bg-gray-50 text-gray-400 border-transparent hover:border-emerald-200'}" data-t="${t}" data-w="${w}" data-s="${s}">${s.toUpperCase()}</button>
@@ -445,8 +444,17 @@
                 area.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-orange-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="grid grid-cols-2 gap-2 mb-8">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button class="ps-s px-4 py-4 text-[10px] border-2 rounded-2xl font-black ${puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div><button class="sv-harian w-full py-5 bg-orange-500 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN PUASA</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.ps-s').forEach(b => b.onclick = (e) => { puasaData[e.target.dataset.t] = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
-            } else {
-                area.innerHTML = `<div class="p-10 text-center bg-white rounded-[2.5rem] shadow-xl"><p class="text-gray-400 font-bold uppercase tracking-widest text-sm italic">Fitur ${currentTab} segera hadir...</p></div>`;
+            } else if (currentTab === 'Tadarus') {
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-blue-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="grid grid-cols-2 gap-4 mb-8"><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">NAMA SURAT</label><input type="text" class="td-s w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">AYAT</label><input type="text" class="td-a w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="1-10" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-5 bg-blue-600 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
+                area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = e.target.value; saveUserState(); });
+                area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
+                area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
+            } else if (currentTab === 'Ceramah') {
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-rose-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="space-y-4 mb-8"><input type="text" class="cr-p w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Tempat / Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"><textarea class="cr-r w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Ringkasan..." data-t="${t}" rows="3">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full py-5 bg-rose-600 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
+                area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = e.target.value; saveUserState(); });
+                area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = e.target.value; saveUserState(); });
+                area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = e.target.value; saveUserState(); });
+                area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             }
         }
 
@@ -474,15 +482,20 @@
             saveAllRecords();
             
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
                 showToast(`${wkt} Berhasil Disimpan!`);
-            } catch (e) { showToast("Error Cloud. Coba lagi.", false); }
+            } catch (e) { showToast("Gagal menyimpan.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${wkt.toUpperCase()}`; }
         }
 
         async function handleSimpanHarian(tgl) {
-            let detailObj = (currentTab === 'Tarawih') ? tarawihData[tgl] : { status: puasaData[tgl] };
-            if (!detailObj || (currentTab === 'Tarawih' && !detailObj.status) || (currentTab === 'Puasa' && !puasaData[tgl])) return showToast("Data belum lengkap!", false);
+            let detailObj = null;
+            if (currentTab === 'Tarawih') detailObj = tarawihData[tgl];
+            else if (currentTab === 'Puasa') detailObj = { status: puasaData[tgl] };
+            else if (currentTab === 'Tadarus') detailObj = tadarusData[tgl];
+            else if (currentTab === 'Ceramah') detailObj = ceramahData[tgl];
+
+            if (!detailObj) return showToast("Data belum lengkap!", false);
             
             const btn = document.querySelector(`.sv-harian[data-t="${tgl}"]`);
             btn.disabled = true; btn.textContent = 'SEDANG MENGIRIM...';
@@ -501,7 +514,7 @@
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
                 showToast(`Data Berhasil Disimpan!`);
             } catch (e) { showToast("Gagal terhubung.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${currentTab.toUpperCase()}`; }
