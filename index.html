@@ -300,12 +300,16 @@
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
-                        const cat = item.kategori;
+                        // Infer kategori jika kolom Subuh ada
+                        const cat = item.kategori || (item.Subuh ? 'Shalat Fardu' : null);
+                        if (!cat) return;
+
                         let detail = item.detail || item.hadir;
-                        if (!detail && cat === 'Shalat Fardu') {
+                        if (cat === 'Shalat Fardu' && (item.Subuh || item.Dzuhur)) {
                             detail = { Subuh: item.Subuh, Dzuhur: item.Dzuhur, Ashar: item.Ashar, Maghrib: item.Maghrib, Isya: item.Isya };
                         }
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
+                        
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
@@ -339,9 +343,20 @@
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     allRecords = result.data.map(item => {
-                        // LOGIKA PERBAIKAN: Jika kolom Shalat terpisah di Spreadsheet (Subuh, Dzuhur, dll)
+                        // DETEKSI CERDAS KATEGORI: Jika kolom 'kategori' kosong tetapi kolom 'Subuh' ada
+                        let cat = item.kategori;
+                        if (!cat && item.Subuh) cat = 'Shalat Fardu';
+                        if (!cat && item.penceramah) cat = 'Ceramah';
+                        if (!cat && item.pilihan) cat = 'Tadarus';
+                        if (!cat && item.status && item.tempat) cat = 'Tarawih';
+                        if (!cat && item.status && !item.tempat) cat = 'Puasa';
+                        
+                        if (!cat) cat = 'Shalat Fardu'; // Default fallback
+
                         let detail = item.detail || item.hadir;
-                        if (!detail && item.kategori === 'Shalat Fardu') {
+                        
+                        // Jika formatnya kolom terpisah (Sistem Lama Banget)
+                        if (cat === 'Shalat Fardu' && item.Subuh) {
                             detail = JSON.stringify({
                                 Subuh: item.Subuh || '-',
                                 Dzuhur: item.Dzuhur || '-',
@@ -349,11 +364,20 @@
                                 Maghrib: item.Maghrib || '-',
                                 Isya: item.Isya || '-'
                             });
+                        } else if (cat === 'Tarawih' && item.status) {
+                            detail = JSON.stringify({ status: item.status, tempat: item.tempat || '-' });
+                        } else if (cat === 'Puasa' && item.status) {
+                            detail = JSON.stringify({ status: item.status });
+                        } else if (cat === 'Tadarus' && item.surat) {
+                            detail = JSON.stringify({ pilihan: item.pilihan, surat: item.surat, ayat: item.ayat });
+                        } else if (cat === 'Ceramah' && item.penceramah) {
+                            detail = JSON.stringify({ penceramah: item.penceramah, tempat: item.tempat, ringkasan: item.ringkasan });
                         }
+
                         return {
                             nama: item.nama, 
                             kelas: item.kelas, 
-                            kategori: item.kategori, 
+                            kategori: cat, 
                             tanggal: item.tanggal, 
                             hadir: detail
                         };
@@ -381,7 +405,7 @@
             });
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4" style="background: ${config.background_color};">
-                    <div class="w-full max-w-md rounded-2xl shadow-2xl p-8 bg-white">
+                    <div class="w-full max-md:max-w-md rounded-2xl shadow-2xl p-8 bg-white">
                         <h1 class="text-center font-bold text-3xl mb-2 text-emerald-700">${config.app_title}</h1>
                         <p class="text-center text-sm mb-8 text-gray-500">${config.welcome_message}</p>
                         <form id="loginForm" class="space-y-4">
@@ -720,22 +744,22 @@
         function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
         
         function renderDetailData(k, d) {
-            d = parseRecordData(d);
-            if (!d) return '-'; 
+            const data = parseRecordData(d);
+            if (!data) return '-'; 
+            
             if (k === 'Shalat Fardu') {
-                if (typeof d !== 'object') return d;
+                if (typeof data !== 'object') return data; // Jika hanya string "berjamaah"
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                // Tampilkan semua waktu yang ada isinya atau minimal beri tanda '-' jika null
                 const entries = orderedKeys.map(key => {
-                    const val = d[key] || '-';
+                    const val = data[key] || '-';
                     return `${key}: <span class="font-bold text-emerald-600">${val}</span>`;
                 });
                 return entries.join(' | ');
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
-            return JSON.stringify(d);
+            } else if (k === 'Tarawih') return `Status: <b>${data.status || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b>`;
+            else if (k === 'Puasa') return `Status: <b>${typeof data === 'string' ? data : (data.status || '-')}</b>`;
+            else if (k === 'Tadarus') return `Metode: <b>${data.pilihan || '-'}</b>, Surat: <b>${data.surat || '-'}</b> (${data.ayat || '-'})`;
+            else if (k === 'Ceramah') return `Penceramah: <b>${data.penceramah || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${data.ringkasan || '-'}"</span>`;
+            return JSON.stringify(data);
         }
 
         async function init() { 
