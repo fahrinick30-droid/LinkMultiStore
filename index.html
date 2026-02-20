@@ -489,15 +489,39 @@
             </div>`;
     }
 
+    // --- PERBAIKAN: Fungsi renderDetail yang lebih kokoh ---
     function renderDetail(k, d) {
-        if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
+        // Coba parsing jika d adalah string JSON
+        if (typeof d === 'string') {
+            try {
+                const parsed = JSON.parse(d);
+                if (parsed && typeof parsed === 'object') d = parsed;
+            } catch (e) {
+                // Biarkan d tetap string jika gagal parse
+            }
+        }
+        
+        // Kasus dasar: data kosong
         if (!d) return '-';
-        if (k === 'Shalat Fardu') return Object.keys(d).filter(w => d[w]).map(w => `${w}: <b>${d[w]}</b>`).join(' | ');
+        
+        // Jika d masih string setelah dicoba parse (misal: data lama berupa string "berjamaah")
+        if (typeof d === 'string') return `<b>${d}</b>`;
+
+        // Kasus khusus kategori: Shalat Fardu (Objek berisi kunci nama shalat)
+        if (k === 'Shalat Fardu') {
+            // Pastikan kita benar-benar mengiterasi kunci objek, bukan indeks string
+            return Object.keys(d)
+                .filter(w => d[w] && isNaN(w)) // Filter hanya kunci yang memiliki nilai dan bukan angka (indeks)
+                .map(w => `${w}: <b>${d[w]}</b>`)
+                .join(' | ') || `<b>${JSON.stringify(d)}</b>`;
+        }
+        
         if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
-        if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
+        if (k === 'Puasa') return `Status: <b>${typeof d === 'object' ? (d.status || '-') : d}</b>`;
         if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (Ayat: ${d.ayat || '-'})`;
         if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
-        return JSON.stringify(d);
+        
+        return typeof d === 'object' ? JSON.stringify(d) : d;
     }
 
     function handleCetakGlobal() {
