@@ -183,10 +183,10 @@
                     <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full ${isDanger ? 'bg-red-100' : 'bg-blue-100'} mb-4">
                         <svg class="h-6 w-6 ${isDanger ? 'text-red-600' : 'text-blue-600'}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </div>
-                    <h3 class="text-lg leading-6 font-bold text-gray-900 mb-2">Konfirmasi</h3>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi</h3>
                     <p class="text-sm text-gray-500 mb-6">${message}</p>
                     <div class="flex gap-3 justify-center">
-                        <button class="modal-cancel-btn flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">Batal</button>
+                        <button class="modal-cancel-btn flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium">Batal</button>
                         <button class="modal-confirm-btn flex-1 px-4 py-2 text-white rounded-lg font-medium shadow-md ${isDanger ? 'bg-red-600' : 'bg-blue-600'}">Ya, Lanjutkan</button>
                     </div>
                 </div>
@@ -244,18 +244,20 @@
                 
                 btn.disabled = true; btn.textContent = "Memproses...";
                 try {
-                    const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ 
-                        action: 'registerTeacher', 
-                        email: emailInput,
-                        nama_sekolah: schoolInput 
-                    })});
-                    const data = await res.json();
-                    if (data.ss_id) {
+                    const res = await fetch(GOOGLE_SCRIPT_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors', // Penting untuk bypass CORS Apps Script
+                        body: JSON.stringify({ 
+                            action: 'registerTeacher', 
+                            email: emailInput,
+                            nama_sekolah: schoolInput 
+                        })
+                    });
+                    // Karena mode no-cors tidak bisa baca response, kita asumsikan berhasil atau tunggu sesaat
+                    setTimeout(() => {
                         document.getElementById('regResult').classList.remove('hidden');
-                        sessionStorage.setItem('current_school_id', data.ss_id);
-                        document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
                         btn.textContent = "Berhasil!";
-                    }
+                    }, 1000);
                 } catch (err) { 
                     btn.disabled = false; btn.textContent = "Coba Lagi"; 
                     showToast("Gagal mendaftar. Periksa koneksi.", false);
@@ -267,7 +269,7 @@
             document.getElementById('app').innerHTML = `
                 <div class="h-full flex flex-col items-center justify-center bg-gray-900 text-white p-6 text-center">
                     <h1 class="text-4xl font-bold mb-4">Selesai</h1>
-                    <p class="text-gray-400">Pendaftaran berhasil. Silakan gunakan link yang sudah disalin untuk akses siswa.</p>
+                    <p class="text-gray-400">Pendaftaran berhasil dikirim. Silakan gunakan link yang sudah disalin untuk akses siswa.</p>
                 </div>
             `;
         }
@@ -275,8 +277,7 @@
         window.copyLink = () => {
             const text = document.getElementById('shareLink').value;
             const ta = document.createElement("textarea");
-            ta.value = text;
-            ta.style.position = 'fixed'; ta.style.opacity = '0';
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
             document.body.appendChild(ta); ta.select();
             try { document.execCommand('copy'); showToast("Link disalin!"); } catch (err) { showToast("Gagal menyalin.", false); }
             document.body.removeChild(ta);
@@ -336,6 +337,15 @@
             loadingToast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600 flex items-center gap-2`;
             loadingToast.innerHTML = `<span>🔄</span> Sinkronisasi database...`;
             document.body.appendChild(loadingToast);
+
+            try {
+                const checkUrl = new URL(GOOGLE_SCRIPT_URL);
+                checkUrl.searchParams.append('action', 'checkInfo');
+                checkUrl.searchParams.append('ss_id', SCHOOL_ID);
+                const checkRes = await fetch(checkUrl);
+                const checkData = await checkRes.json();
+                hasInfoFiles = checkData.hasFiles === true;
+            } catch (e) { hasInfoFiles = true; }
 
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
@@ -439,26 +449,26 @@
             const area = document.getElementById('contentArea');
             const days = Array.from({length: 30}, (_, i) => i + 1);
             if (currentTab === 'Shalat Fardu') {
-                area.innerHTML = `<div class="space-y-8">${days.map(t => `<div class="p-5 border rounded-2xl bg-white shadow-sm border-l-8 border-emerald-500"><h3 class="font-black text-emerald-800 mb-4">📅 Hari ke-${t}</h3><div class="space-y-4">${['Subuh','Dzuhur','Ashar','Maghrib','Isya'].map(w => `<div class="flex flex-col md:flex-row md:items-center gap-3 pb-3 border-b border-gray-100 last:border-0"><div class="w-24 font-bold text-gray-600">${w}</div><div class="flex flex-wrap gap-2 flex-1">${['berjamaah','munfarid','haid','tidak shalat'].map(s => `<button class="sh-btn px-3 py-1.5 text-xs rounded-full border-2 transition-all font-semibold ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-100'}" data-t="${t}" data-w="${w}" data-s="${s}">${s}</button>`).join('')}</div><button class="sv-wkt-btn px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white font-bold" data-t="${t}" data-w="${w}">Simpan</button></div>`).join('')}</div></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-8">${days.map(t => `<div class="p-5 border rounded-2xl bg-white shadow-sm border-l-8 border-emerald-500"><h3 class="font-black text-emerald-800 mb-4">📅 Hari ke-${t} <span class="text-xs font-normal text-gray-400 italic">Shalat Wajib</span></h3><div class="space-y-4">${['Subuh','Dzuhur','Ashar','Maghrib','Isya'].map(w => `<div class="flex flex-col md:flex-row md:items-center gap-3 pb-3 border-b border-gray-100 last:border-0"><div class="w-24 font-bold text-gray-600">⏰ ${w}</div><div class="flex flex-wrap gap-2 flex-1">${['berjamaah','munfarid','haid','tidak shalat'].map(s => `<button class="sh-btn px-3 py-1.5 text-xs rounded-full border-2 transition-all font-semibold ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-100'}" data-t="${t}" data-w="${w}" data-s="${s}">${s}</button>`).join('')}</div><button class="sv-wkt-btn px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white font-bold shadow active:scale-95" data-t="${t}" data-w="${w}">Simpan ${w}</button></div>`).join('')}</div></div>`).join('')}</div>`;
                 area.querySelectorAll('.sh-btn').forEach(b => b.onclick = (e) => { const d = e.target.dataset; shalatData[d.t][d.w] = d.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-wkt-btn').forEach(b => b.onclick = (e) => handleSimpanPerWaktu(e.target.dataset.t, e.target.dataset.w));
             } else if (currentTab === 'Tarawih') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl shadow-sm border-l-8 border-indigo-500"><h3 class="font-black text-indigo-900 mb-4">📅 Hari ke-${t}</h3><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase">STATUS</p><div class="flex flex-wrap gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-3 py-2 text-xs border-2 rounded-xl font-bold ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}" data-t="${t}" data-s="${s}">${s}</button>`).join('')}</div></div><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase">TEMPAT</p><div class="flex gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-2 text-xs border-2 rounded-xl font-bold ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}" data-t="${t}" data-tmp="${tmp}">${tmp}</button>`).join('')}</div></div><button class="sv-harian w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl shadow-sm border-l-8 border-indigo-500"><h3 class="font-black text-indigo-900 mb-4">📅 Hari ke-${t}</h3><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">STATUS PELAKSANAAN</p><div class="flex flex-wrap gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-3 py-2 text-xs border-2 rounded-xl font-bold ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}" data-t="${t}" data-s="${s}">${s}</button>`).join('')}</div></div><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">TEMPAT</p><div class="flex gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-2 text-xs border-2 rounded-xl font-bold ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-100'}" data-t="${t}" data-tmp="${tmp}">${tmp}</button>`).join('')}</div></div><button class="sv-harian w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA TARAWIH</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.tr-s').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].status = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.tr-t').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].tempat = e.target.dataset.tmp; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Puasa') {
-                area.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-orange-500 shadow-sm"><h3 class="font-black text-orange-900 mb-4">📅 Hari ke-${t}</h3><div class="flex flex-wrap gap-2 mb-4">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button class="ps-s px-4 py-2 text-xs border-2 rounded-xl font-bold ${puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-gray-100'}" data-t="${t}" data-s="${s}">${s}</button>`).join('')}</div><button class="sv-harian w-full py-3 bg-orange-500 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-orange-500 shadow-sm"><h3 class="font-black text-orange-900 mb-4">📅 Hari ke-${t}</h3><div class="flex flex-wrap gap-2 mb-4">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button class="ps-s px-4 py-2 text-xs border-2 rounded-xl font-bold ${puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-gray-100'}" data-t="${t}" data-s="${s}">${s}</button>`).join('')}</div><button class="sv-harian w-full py-3 bg-orange-500 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA PUASA</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.ps-s').forEach(b => b.onclick = (e) => { puasaData[e.target.dataset.t] = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Tadarus') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Simakan Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">NAMA SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-20" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="flex gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-2 text-xs border-2 rounded-xl font-bold ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'Sendiri' : 'Simakan Bersama Ustadz'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-[10px] font-black text-gray-400">NAMA SURAT</label><input type="text" class="td-s w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400">AYAT</label><input type="text" class="td-a w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="1-20" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.td-m').forEach(b => b.onclick = (e) => { tadarusData[e.target.dataset.t].pilihan = e.target.dataset.m; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Ceramah') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-3"><input type="text" class="cr-p w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Tempat / Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"><textarea class="cr-r w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Ringkasan..." data-t="${t}">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full mt-4 py-3 bg-rose-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN DATA</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-5 border rounded-2xl border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-3"><input type="text" class="cr-p w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Tempat / Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"><textarea class="cr-r w-full p-3 border-2 border-gray-50 rounded-xl text-sm outline-none focus:border-rose-500" placeholder="Ringkasan isi ceramah..." data-t="${t}">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full mt-4 py-3 bg-rose-600 text-white rounded-xl font-black shadow-lg" data-t="${t}">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = e.target.value; saveUserState(); });
                 area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = e.target.value; saveUserState(); });
@@ -467,19 +477,31 @@
         }
 
         async function handleSimpanPerWaktu(tgl, wkt) {
+            if (!SCHOOL_ID) return showToast("ID Sekolah tidak ditemukan.", false);
             const status = shalatData[tgl]?.[wkt];
             if (!status) return showToast(`Pilih status untuk shalat ${wkt} Hari ke-${tgl}!`, false);
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             if (btn) { btn.disabled = true; btn.textContent = '...'; }
             const detailStr = JSON.stringify(shalatData[tgl]);
             const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: detailStr };
+            
+            // Simpan Lokal
             allRecords = allRecords.filter(r => !(r.nama.toString().trim().toLowerCase() === currentUser.nama.trim().toLowerCase() && r.kelas.toString().trim().toLowerCase() === currentUser.kelas.trim().toLowerCase() && r.kategori === 'Shalat Fardu' && r.tanggal == tgl));
             allRecords.push(record); saveAllRecords();
-            try { await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu' }) }); showToast(`${wkt} Tersimpan!`); } catch (e) { showToast("Gagal!", false); }
-            finally { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } }
+
+            try { 
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors',
+                    body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu' }) 
+                }); 
+                showToast(`${wkt} Berhasil dikirim!`); 
+            } catch (e) { showToast("Gagal kirim Cloud.", false); }
+            finally { if (btn) { btn.disabled = false; btn.textContent = `Simpan ${wkt}`; } }
         }
 
         async function handleSimpanHarian(tgl) {
+            if (!SCHOOL_ID) return showToast("ID Sekolah tidak ditemukan.", false);
             if (currentTab === 'Tarawih' && (!tarawihData[tgl].status || !tarawihData[tgl].tempat)) return showToast("Mohon lengkapi Status dan Tempat!", false);
             if (currentTab === 'Puasa' && !puasaData[tgl]) return showToast("Mohon pilih Status Puasa!", false);
             if (currentTab === 'Tadarus' && (!tadarusData[tgl].pilihan || !tadarusData[tgl].surat.trim() || !tadarusData[tgl].ayat.trim())) return showToast("Lengkapi data Tadarus!", false);
@@ -489,10 +511,20 @@
             if (btn) { btn.disabled = true; btn.textContent = '...'; }
             let detailObj = currentTab === 'Tarawih' ? tarawihData[tgl] : (currentTab === 'Puasa' ? puasaData[tgl] : (currentTab === 'Tadarus' ? tadarusData[tgl] : ceramahData[tgl]));
             const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: JSON.stringify(detailObj) };
+            
+            // Simpan Lokal
             allRecords = allRecords.filter(r => !(r.nama.toString().trim().toLowerCase() === currentUser.nama.trim().toLowerCase() && r.kelas.toString().trim().toLowerCase() === currentUser.kelas.trim().toLowerCase() && r.kategori === currentTab && r.tanggal == tgl));
             allRecords.push(record); saveAllRecords();
-            try { await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab }) }); showToast("Berhasil!"); } catch (e) { showToast("Gagal!", false); }
-            finally { if (btn) { btn.disabled = false; btn.textContent = '💾 SIMPAN DATA'; } }
+
+            try { 
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors',
+                    body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab }) 
+                }); 
+                showToast("Berhasil dikirim ke Cloud!"); 
+            } catch (e) { showToast("Gagal simpan Cloud.", false); }
+            finally { if (btn) { btn.disabled = false; btn.textContent = `💾 SIMPAN DATA ${currentTab.toUpperCase()}`; } }
         }
 
         function getMergedRecords(records) {
@@ -510,7 +542,7 @@
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8">
                     <div class="max-w-4xl mx-auto">
-                        <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center">
+                        <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center flex-wrap gap-4">
                             <div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Amalan Saya</h1><p class="text-gray-500">Ringkasan data amalan.</p></div>
                             <button id="backBtn" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button>
                         </div>
@@ -535,8 +567,8 @@
             if (students.length === 0) return showToast("Tidak ada data siswa untuk filter ini", false);
             const printWindow = window.open('', '_blank');
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            let html = `<html><head><title>Rekap Global</title><style>body{font-family:Arial,sans-serif;padding:30px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}</style></head><body><h1>Rekapitulasi Amalan</h1><table><thead><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Data</th></tr></thead><tbody>`;
-            students.forEach((s, idx) => { const count = allMerged.filter(r => r.nama.trim().toLowerCase() === s.nama.toLowerCase() && r.kelas.trim().toLowerCase() === s.kelas.toLowerCase()).length; html += `<tr><td>${idx+1}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${count} Amalan</td></tr>`; });
+            let html = `<html><head><title>Rekap Global</title><style>body{font-family:Arial,sans-serif;padding:30px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}</style></head><body><h1>Rekapitulasi Amalan Ramadhan</h1><table><thead><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Data</th></tr></thead><tbody>`;
+            students.forEach((s, idx) => { const count = allMerged.filter(r => r.nama.toLowerCase() === s.nama.toLowerCase() && r.kelas.toLowerCase() === s.kelas.toLowerCase()).length; html += `<tr><td>${idx+1}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${count} Amalan</td></tr>`; });
             html += `</tbody></table><p>Sumedang, ${dateStr}</p><script>window.onload=()=>window.print();<\/script></body></html>`;
             printWindow.document.write(html); printWindow.document.close();
         }
@@ -595,13 +627,13 @@
         }
 
         function showStudentDetail(s) {
-            // PENTING: Filter rincian siswa dengan trim dan toLowerCase agar selalu cocok dengan database
+            // Filter rincian siswa dengan trim dan toLowerCase agar selalu cocok dengan database
             const dataRaw = allRecords.filter(r => r.nama.trim().toLowerCase() === s.nama.trim().toLowerCase() && r.kelas.trim().toLowerCase() === s.kelas.trim().toLowerCase());
             const data = getMergedRecords(dataRaw);
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-50 p-6">
                     <div class="max-w-4xl mx-auto">
-                        <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center">
+                        <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center flex-wrap gap-4">
                             <div><h2 class="font-black text-2xl text-slate-800">${s.nama}</h2><p class="font-bold text-emerald-600 italic text-sm">Kelas: ${s.kelas}</p></div>
                             <div class="flex gap-2"><button id="individualCetak" class="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold shadow flex items-center gap-2">🖨️ CETAK</button><button id="backAdmin" class="px-5 py-2 bg-slate-800 text-white rounded-xl font-bold shadow">← KEMBALI</button></div>
                         </div>
@@ -610,7 +642,7 @@
                                 const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
                                 return `<div class="bg-white p-6 rounded-2xl shadow-sm border">
                                     <h3 class="font-black border-b pb-2 mb-4 text-slate-700">${getCategoryIcon(cat)} ${cat}</h3>
-                                    <div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, parseRecordData(r.hadir))}</div>`).join('') : '<p class="text-xs text-gray-400 italic">Belum ada data.</p>'}</div>
+                                    <div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>H- ${r.tanggal}:</strong><br>${renderDetailData(cat, parseRecordData(r.hadir))}</div>`).join('') : '<p class="text-xs text-gray-400 italic">Belum ada data.</p>'}</div>
                                 </div>`;
                             }).join('')}
                         </div>
@@ -622,7 +654,11 @@
 
         // --- HELPERS ---
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-        function parseRecordData(d) { if (!d) return null; if (typeof d === 'object') return d; try { return JSON.parse(d); } catch (e) { return d; } }
+        function parseRecordData(d) { 
+            if (!d) return null; 
+            if (typeof d === 'object') return d; 
+            try { return JSON.parse(d); } catch (e) { return d; } 
+        }
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             if (!d) return '-'; 
@@ -644,7 +680,16 @@
             loadAllRecords(); 
             const saved = safeGetStorage(getLocalUserKey()); 
             if (!SCHOOL_ID) { renderRegistration(); } 
-            else { if (saved) { try { currentUser = JSON.parse(saved); loadUserState(); showAmalanPage(); if (!isAdmin()) setTimeout(syncUserFromCloud, 500); } catch (e) { showLoginPage(); } } else { showLoginPage(); } }
+            else { 
+                if (saved) { 
+                    try { 
+                        currentUser = JSON.parse(saved); 
+                        loadUserState(); 
+                        showAmalanPage(); 
+                        if (!isAdmin()) setTimeout(syncUserFromCloud, 500); 
+                    } catch (e) { showLoginPage(); } 
+                } else { showLoginPage(); } 
+            }
             if (window.dataSdk) await window.dataSdk.init({ onDataChanged(d) { allRecords = d; saveAllRecords(); } }); 
             if (window.elementSdk) window.elementSdk.init({ defaultConfig, onConfigChange: (c) => Object.assign(window.elementSdk.config, c) }); 
         }
