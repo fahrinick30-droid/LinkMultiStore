@@ -330,12 +330,12 @@
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
                         
                         const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: cat, tanggal: tgl, hadir: JSON.stringify(detail) };
-                        allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
-                        allRecords.push(record);
+                        // Logika penggabungan baris yang sama di memory
+                        processLocalRecord(record);
 
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
-                        else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
+                        else if (cat === 'Puasa') puasaData[tgl] = (typeof detail === 'object' ? detail.status : detail);
                         else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
                         else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
                     });
@@ -344,6 +344,24 @@
                     if (document.getElementById('contentArea')) renderContentArea();
                 }
             } catch (e) {}
+        }
+
+        function processLocalRecord(record) {
+            // Find existing
+            const existing = allRecords.find(r => r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal);
+            if (existing && record.kategori === 'Shalat Fardu') {
+                let existingHadir = parseRecordData(existing.hadir);
+                let newHadir = parseRecordData(record.hadir);
+                if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
+                    existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
+                } else {
+                    existing.hadir = record.hadir;
+                }
+            } else if (existing) {
+                existing.hadir = record.hadir;
+            } else {
+                allRecords.push(record);
+            }
         }
 
         function showAmalanPage() {
@@ -453,9 +471,7 @@
                 shalat_detail: detailObj
             };
 
-            // Update local allRecords
-            allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
-            allRecords.push({ ...record, hadir: JSON.stringify(detailObj) });
+            processLocalRecord(record);
             saveAllRecords();
             
             try {
@@ -494,9 +510,7 @@
                 ceramah_detail: currentTab === 'Ceramah' ? detailObj : undefined
             };
 
-            // Update local allRecords
-            allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
-            allRecords.push({ ...record, hadir: JSON.stringify(detailObj) });
+            processLocalRecord(record);
             saveAllRecords();
 
             try {
@@ -511,13 +525,13 @@
         }
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-        function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        function parseRecordData(d) { try { if (!d) return null; return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
         
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             if (!d) return '-'; 
             if (k === 'Shalat Fardu') {
-                if (typeof d !== 'object') return d;
+                if (typeof d !== 'object' || d === null) return `<span class="font-bold text-emerald-600">${d}</span>`;
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
                 const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
                 return entries.length ? entries.join(' | ') : '-';
@@ -532,7 +546,18 @@
             const map = new Map();
             records.forEach(r => {
                 const key = `${r.nama}-${r.kelas}-${r.kategori}-${r.tanggal}`;
-                map.set(key, r);
+                if (map.has(key) && r.kategori === 'Shalat Fardu') {
+                    let existing = map.get(key);
+                    let existingHadir = parseRecordData(existing.hadir);
+                    let newHadir = parseRecordData(r.hadir);
+                    if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
+                        existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
+                    } else {
+                        map.set(key, r);
+                    }
+                } else {
+                    map.set(key, r);
+                }
             });
             return Array.from(map.values());
         }
@@ -594,14 +619,37 @@
                 const result = await res.json();
                 
                 if (result.status === 'success') {
-                    // Normalize data structure
-                    allRecords = result.data.map(item => ({
-                        nama: item.nama,
-                        kelas: item.kelas,
-                        kategori: item.kategori,
-                        tanggal: item.tanggal,
-                        hadir: item.detail || item.hadir
+                    // Logic to deep merge records from spreadsheet
+                    const rawData = result.data;
+                    const mergedDataMap = new Map();
+                    
+                    rawData.forEach(item => {
+                        const key = `${item.nama}-${item.kelas}-${item.kategori}-${item.tanggal}`;
+                        let hadir = item.detail || item.hadir;
+                        
+                        if (mergedDataMap.has(key) && item.kategori === 'Shalat Fardu') {
+                            let existing = mergedDataMap.get(key);
+                            let existingHadir = parseRecordData(existing.hadir);
+                            let newHadir = parseRecordData(hadir);
+                            
+                            if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
+                                existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
+                            } else {
+                                mergedDataMap.set(key, { ...item, hadir: JSON.stringify(hadir) });
+                            }
+                        } else {
+                            mergedDataMap.set(key, { ...item, hadir: (typeof hadir === 'object' ? JSON.stringify(hadir) : hadir) });
+                        }
+                    });
+
+                    allRecords = Array.from(mergedDataMap.values()).map(r => ({
+                        nama: r.nama,
+                        kelas: r.kelas,
+                        kategori: r.kategori,
+                        tanggal: r.tanggal,
+                        hadir: r.hadir
                     }));
+                    
                     saveAllRecords();
                     showLaporanPage();
                     showToast("Database Sinkron!");
