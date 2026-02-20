@@ -66,7 +66,6 @@
          * KONFIGURASI MULTI-SCHOOL
          */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
-        const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
         function getSchoolId() {
             const params = new URLSearchParams(window.location.search);
@@ -97,7 +96,6 @@
         let currentUser = null;
         let currentTab = 'Shalat Fardu';
         let allRecords = [];
-        let hasInfoFiles = false; 
         const categories = ['Shalat Fardu', 'Tarawih', 'Puasa', 'Tadarus', 'Ceramah'];
 
         let shalatData = {};
@@ -200,9 +198,6 @@
 
         function isAdmin() { return currentUser && currentUser.nama === '*'; }
 
-        /**
-         * REGISTRASI GURU
-         */
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -276,9 +271,6 @@
             showToast("Instruksi diunduh!");
         };
 
-        /**
-         * LOGIKA LOGIN & AMALAN
-         */
         function showLoginPage() {
             const config = window.elementSdk?.config || defaultConfig;
             const lastNama = safeGetStorage('last_nama') || '';
@@ -336,12 +328,18 @@
                         const cat = item.kategori;
                         let detail = item.detail || item.hadir;
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
+                        
+                        const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: cat, tanggal: tgl, hadir: JSON.stringify(detail) };
+                        allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
+                        allRecords.push(record);
+
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
                         else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
                         else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
                     });
+                    saveAllRecords();
                     saveUserState();
                     if (document.getElementById('contentArea')) renderContentArea();
                 }
@@ -424,14 +422,14 @@
             } else if (currentTab === 'Tadarus') {
                 area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border rounded-[2rem] border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="grid grid-cols-2 gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-3 text-[10px] border-2 rounded-xl font-black ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'SENDIRI' : 'DENGAN USTADZ'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-6"><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">NAMA SURAT</label><input type="text" class="td-s w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="Contoh: Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">AYAT</label><input type="text" class="td-a w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="1-20" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-4 bg-blue-600 text-white rounded-xl font-black shadow-lg uppercase text-xs" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.td-m').forEach(b => b.onclick = (e) => { tadarusData[e.target.dataset.t].pilihan = e.target.dataset.m; saveUserState(); renderContentArea(); });
-                area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = e.target.value; saveUserState(); });
-                area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
+                area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = i.value; saveUserState(); });
+                area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = i.value; saveUserState(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Ceramah') {
                 area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border rounded-[2rem] border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-4"><input type="text" class="cr-p w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Tempat / Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"><textarea class="cr-r w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Ringkasan isi ceramah..." data-t="${t}" rows="3">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full mt-6 py-4 bg-rose-600 text-white rounded-xl font-black shadow-lg uppercase text-xs" data-t="${t}">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
-                area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = e.target.value; saveUserState(); });
-                area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = e.target.value; saveUserState(); });
-                area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = e.target.value; saveUserState(); });
+                area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = i.value; saveUserState(); });
+                area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = i.value; saveUserState(); });
+                area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = i.value; saveUserState(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             }
         }
@@ -443,16 +441,22 @@
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
+            const detailObj = shalatData[tgl];
             const record = { 
                 ss_id: SCHOOL_ID, 
                 nama: currentUser.nama, 
                 kelas: currentUser.kelas, 
                 kategori: 'Shalat Fardu', 
                 tanggal: tgl, 
-                hadir: JSON.stringify(shalatData[tgl]),
+                hadir: JSON.stringify(detailObj),
                 sheet: 'Shalat Fardu',
-                shalat_detail: shalatData[tgl]
+                shalat_detail: detailObj
             };
+
+            // Update local allRecords
+            allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
+            allRecords.push({ ...record, hadir: JSON.stringify(detailObj) });
+            saveAllRecords();
             
             try {
                 await fetch(GOOGLE_SCRIPT_URL, { 
@@ -490,6 +494,11 @@
                 ceramah_detail: currentTab === 'Ceramah' ? detailObj : undefined
             };
 
+            // Update local allRecords
+            allRecords = allRecords.filter(r => !(r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal));
+            allRecords.push({ ...record, hadir: JSON.stringify(detailObj) });
+            saveAllRecords();
+
             try {
                 await fetch(GOOGLE_SCRIPT_URL, { 
                     method: 'POST', 
@@ -501,56 +510,183 @@
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${currentTab.toUpperCase()}`; }
         }
 
+        function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
+        function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        
+        function renderDetailData(k, d) {
+            d = parseRecordData(d);
+            if (!d) return '-'; 
+            if (k === 'Shalat Fardu') {
+                if (typeof d !== 'object') return d;
+                const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+                const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
+                return entries.length ? entries.join(' | ') : '-';
+            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
+            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
+            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
+            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
+            return JSON.stringify(d);
+        }
+
+        function getMergedRecords(records) {
+            const map = new Map();
+            records.forEach(r => {
+                const key = `${r.nama}-${r.kelas}-${r.kategori}-${r.tanggal}`;
+                map.set(key, r);
+            });
+            return Array.from(map.values());
+        }
+
         function showRekapPage() {
-            const myRaw = allRecords.filter(r => r.nama === currentUser.nama);
-            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Saya</h1><p class="text-gray-400 font-bold">Ringkasan amalan yang sudah tercatat.</p></div><button id="backBtn" class="px-8 py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg active:scale-95 uppercase text-sm tracking-widest">← Kembali</button></div><div class="space-y-6">${categories.map(cat => `<div class="bg-white rounded-[2rem] shadow-md border overflow-hidden"><div class="p-5 bg-emerald-50 border-b font-black text-emerald-800 uppercase text-xs tracking-widest">${cat}</div><div class="p-6 text-center text-gray-400 text-sm italic">Fitur rekap mendalam sedang disinkronkan...</div></div>`).join('')}</div></div></div>`;
+            const myRaw = allRecords.filter(r => r.nama === currentUser.nama && r.kelas === currentUser.kelas);
+            const my = getMergedRecords(myRaw);
+
+            document.getElementById('app').innerHTML = `
+                <div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h1 class="font-black text-3xl text-emerald-800 tracking-tighter">📊 Rekap Amalan Saya</h1>
+                                <p class="text-gray-400 font-bold">Ringkasan aktivitas yang berhasil tercatat.</p>
+                            </div>
+                            <button id="backBtn" class="px-8 py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg active:scale-95 uppercase text-sm tracking-widest">← Kembali</button>
+                        </div>
+                        <div class="space-y-6">
+                            ${categories.map(cat => {
+                                const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                                return `
+                                    <div class="bg-white rounded-[2rem] shadow-md border overflow-hidden">
+                                        <div class="p-5 bg-emerald-50 border-b flex justify-between items-center">
+                                            <span class="font-black text-emerald-800 uppercase text-xs tracking-widest">${getCategoryIcon(cat)} ${cat}</span>
+                                            <span class="bg-white px-3 py-1 rounded-full text-[10px] font-black text-emerald-600 border border-emerald-100">${items.length} HARI</span>
+                                        </div>
+                                        <div class="divide-y">
+                                            ${items.length ? items.map(r => `
+                                                <div class="p-5 flex gap-4 text-sm items-start">
+                                                    <div class="flex flex-col items-center justify-center min-w-[50px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                                        <span class="text-[9px] font-bold text-slate-400 uppercase">Hari</span>
+                                                        <span class="font-black text-emerald-700 text-lg">${r.tanggal}</span>
+                                                    </div>
+                                                    <div class="flex-1 text-slate-700 leading-relaxed pt-1">
+                                                        ${renderDetailData(cat, r.hadir)}
+                                                    </div>
+                                                </div>
+                                            `).join('') : '<p class="p-10 text-center text-gray-400 font-bold italic">Belum ada data untuk kategori ini.</p>'}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>`;
             document.getElementById('backBtn').onclick = showAmalanPage;
         }
 
-        /**
-         * PANEL ADMIN (GURU)
-         */
         async function fetchAllDataForAdmin() {
             if (!SCHOOL_ID) return;
-            const loading = showToast("Sinkronisasi Database Guru...", true);
+            const loadingToast = showToast("Sinkronisasi Database Guru...", true);
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('action', 'readAll');
                 url.searchParams.append('ss_id', SCHOOL_ID);
-                const res = await fetch(url);
+                
+                const res = await fetch(url, { redirect: 'follow' });
                 const result = await res.json();
+                
                 if (result.status === 'success') {
-                    allRecords = result.data;
+                    // Normalize data structure
+                    allRecords = result.data.map(item => ({
+                        nama: item.nama,
+                        kelas: item.kelas,
+                        kategori: item.kategori,
+                        tanggal: item.tanggal,
+                        hadir: item.detail || item.hadir
+                    }));
+                    saveAllRecords();
                     showLaporanPage();
+                    showToast("Database Sinkron!");
+                } else {
+                    showToast("Gagal sinkronisasi data.", false);
                 }
-            } catch (e) { showToast("Gagal memuat data guru.", false); }
+            } catch (e) { 
+                showToast("Gagal memuat data guru. Periksa ID Sekolah.", false); 
+            }
         }
 
         function showLaporanPage() {
-            const allS = [...new Set(allRecords.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s));
+            const allMerged = getMergedRecords(allRecords);
+            const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
+            
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-100 p-4 md:p-6">
                     <div class="max-w-6xl mx-auto">
                         <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 class="font-black text-2xl text-slate-800">📋 PANEL GURU</h1>
+                            <h1 class="font-black text-2xl text-slate-800 tracking-tighter flex items-center gap-2">📋 PANEL GURU <span class="text-[10px] bg-slate-100 px-3 py-1 rounded-full text-slate-400 font-bold uppercase tracking-widest">${SCHOOL_ID.substring(0,6)}...</span></h1>
                             <div class="flex gap-2">
-                                <button id="syncBtn" class="px-5 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase">🔄 Refresh</button>
-                                <button id="logoutBtn" class="px-5 py-3 bg-slate-800 text-white rounded-xl font-black text-xs uppercase">Keluar</button>
+                                <button id="syncBtn" class="px-5 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider">🔄 Refresh</button>
+                                <button id="logoutBtn" class="px-5 py-3 bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-wider">Keluar</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${allS.map(s => `
-                                <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-transparent hover:border-emerald-500 transition-all cursor-pointer">
-                                    <h3 class="font-black text-slate-800 uppercase tracking-tighter text-lg">${s.nama}</h3>
-                                    <p class="font-bold text-emerald-600 text-xs">KELAS ${s.kelas}</p>
-                                    <p class="text-[10px] text-gray-400 mt-4 uppercase font-bold tracking-widest">Klik untuk detail</p>
-                                </div>
-                            `).join('')}
+                        <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 border border-slate-200">
+                             <p class="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Total Siswa Terdaftar: ${allS.length}</p>
+                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                ${allS.length ? allS.map(s => `
+                                    <div class="bg-gray-50 p-6 rounded-[2rem] border-2 border-transparent hover:border-emerald-500 hover:bg-white transition-all cursor-pointer group student-card" data-n="${s.nama}" data-k="${s.kelas}">
+                                        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-lg group-hover:text-emerald-700">${s.nama}</h3>
+                                        <p class="font-bold text-emerald-600 text-xs">KELAS ${s.kelas}</p>
+                                        <div class="mt-4 flex items-center justify-between">
+                                            <span class="text-[10px] text-gray-400 uppercase font-bold tracking-widest italic">Lihat Detail</span>
+                                            <span class="text-emerald-500 font-black">→</span>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div class="col-span-full py-10 text-center text-slate-400 font-bold">Belum ada data siswa masuk.</div>'}
+                             </div>
                         </div>
                     </div>
                 </div>`;
+            
+            document.querySelectorAll('.student-card').forEach(c => c.onclick = (e) => {
+                const d = e.currentTarget.dataset;
+                showStudentDetail({ nama: d.n, kelas: d.k });
+            });
             document.getElementById('syncBtn').onclick = fetchAllDataForAdmin;
             document.getElementById('logoutBtn').onclick = handleLogout;
+        }
+
+        function showStudentDetail(s) {
+            const dataRaw = allRecords.filter(r => r.nama === s.nama && r.kelas === s.kelas);
+            const data = getMergedRecords(dataRaw);
+
+            document.getElementById('app').innerHTML = `
+                <div class="w-full h-full overflow-auto bg-slate-50 p-6">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4 border-l-[12px] border-emerald-500">
+                            <div>
+                                <h2 class="font-black text-3xl text-slate-800 tracking-tighter">${s.nama}</h2>
+                                <p class="font-bold text-emerald-600 uppercase text-xs tracking-widest">Detail Amalan Ramadhan • Kelas ${s.kelas}</p>
+                            </div>
+                            <button id="backAdmin" class="px-6 py-3 bg-slate-800 text-white rounded-xl font-black text-xs uppercase shadow-md">← Kembali</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${categories.map(cat => {
+                                const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                                return `
+                                    <div class="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                                        <h3 class="font-black border-b pb-3 mb-4 text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">${getCategoryIcon(cat)} ${cat}</h3>
+                                        <div class="space-y-3">
+                                            ${recs.length ? recs.map(r => `
+                                                <div class="text-xs p-4 bg-slate-50 rounded-2xl border border-slate-100 leading-relaxed">
+                                                    <div class="font-black text-emerald-700 mb-1">HARI KE-${r.tanggal}</div>
+                                                    <div>${renderDetailData(cat, r.hadir)}</div>
+                                                </div>
+                                            `).join('') : '<p class="text-[10px] text-gray-400 font-bold italic py-4">Belum ada catatan.</p>'}
+                                        </div>
+                                    </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>`;
+            document.getElementById('backAdmin').onclick = showLaporanPage;
         }
 
         /**
