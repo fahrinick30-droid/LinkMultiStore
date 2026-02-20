@@ -293,23 +293,10 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    // Bersihkan rekap lokal untuk disinkronkan ulang dari cloud
-                    allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas));
-                    
                     result.data.forEach(item => {
                         const tgl = item.tanggal; const cat = item.kategori;
                         let detail = item.detail || item.hadir;
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
-                        
-                        // Masukkan ke allRecords untuk tampilan Rekap Saya
-                        allRecords.push({
-                            nama: currentUser.nama, 
-                            kelas: currentUser.kelas, 
-                            kategori: cat, 
-                            tanggal: tgl, 
-                            hadir: typeof detail === 'object' ? JSON.stringify(detail) : detail 
-                        });
-
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
@@ -317,7 +304,6 @@
                         else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
                     });
                     saveUserState();
-                    saveAllRecords();
                     if (document.getElementById('contentArea')) renderContentArea();
                 }
             } catch (e) {}
@@ -469,17 +455,10 @@
             if (!SCHOOL_ID) return showToast("Error: ID Sekolah tidak ditemukan.", false);
             const status = shalatData[tgl]?.[wkt]; if (!status) return showToast(`Pilih status shalat ${wkt}!`, false);
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`); if (btn) { btn.disabled = true; btn.textContent = '...'; }
-            
-            const detailStr = JSON.stringify(shalatData[tgl]);
-            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: detailStr };
-            
+            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: JSON.stringify(shalatData[tgl]) };
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === 'Shalat Fardu' && r.tanggal == tgl));
             allRecords.push(record); saveAllRecords();
-
-            try { 
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu', shalat_detail: shalatData[tgl] }) }); 
-                showToast(`Berhasil disimpan!`); 
-            } 
+            try { await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu', shalat_detail: shalatData[tgl] }) }); showToast(`Berhasil disimpan!`); } 
             catch (e) { showToast("Gagal mengirim data.", false); } finally { if (btn) { btn.disabled = false; btn.textContent = `💾 Simpan`; } }
         }
 
@@ -492,15 +471,10 @@
             else if (currentTab === 'Puasa') detail = JSON.stringify(puasaData[tgl]);
             else if (currentTab === 'Tadarus') detail = JSON.stringify(tadarusData[tgl]);
             else if (currentTab === 'Ceramah') detail = JSON.stringify(ceramahData[tgl]);
-            
             const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detail };
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === currentTab && r.tanggal == tgl));
             allRecords.push(record); saveAllRecords();
-
-            try { 
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab, shalat_detail: shalatData[tgl], tarawih_detail: tarawihData[tgl], puasa_detail: puasaData[tgl], tadarus_detail: tadarusData[tgl], ceramah_detail: ceramahData[tgl] }) }); 
-                showToast(`Data berhasil dikirim!`); 
-            } 
+            try { await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab, shalat_detail: shalatData[tgl], tarawih_detail: tarawihData[tgl], puasa_detail: puasaData[tgl], tadarus_detail: tadarusData[tgl], ceramah_detail: ceramahData[tgl] }) }); showToast(`Data berhasil dikirim!`); } 
             catch (e) { showToast("Gagal terhubung.", false); } finally { if (btn) { btn.disabled = false; btn.textContent = `💾 SIMPAN`; } }
         }
 
@@ -511,7 +485,7 @@
 
         function showRekapPage() {
             const myRaw = allRecords.filter(r => r.nama === currentUser.nama && r.kelas === currentUser.kelas); const my = getMergedRecords(myRaw);
-            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Amalan Saya</h1><p class="text-gray-500 text-sm">Ringkasan data yang tersimpan di server.</p></div><button id="backBtn" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${getCategoryIcon(cat)} ${getCategoryDisplay(cat)}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300 whitespace-nowrap">HARI ${r.tanggal}</span><div class="flex-1 text-gray-700">${renderDetailData(cat, parseRecordData(r.hadir))}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
+            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Amalan Saya</h1><p class="text-gray-500 text-sm">Ringkasan data yang tersimpan.</p></div><button id="backBtn" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${getCategoryIcon(cat)} ${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300 whitespace-nowrap">HARI ${r.tanggal}</span><div class="flex-1 text-gray-700">${renderDetailData(cat, parseRecordData(r.hadir))}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
             document.getElementById('backBtn').onclick = showAmalanPage;
         }
 
@@ -585,24 +559,11 @@
                             
                             <div class="grid grid-cols-5 gap-1 mb-4">
                                 ${categories.map(cat => {
-                                    let displayCount = 0;
-                                    const items = sData.filter(r => r.kategori === cat);
-                                    if (cat === 'Shalat Fardu') {
-                                        items.forEach(item => {
-                                            const d = parseRecordData(item.hadir);
-                                            if (d && typeof d === 'object') {
-                                                ['Subuh','Dzuhur','Ashar','Maghrib','Isya'].forEach(w => {
-                                                    if (d[w] && d[w] !== 'tidak shalat' && d[w] !== 'haid') displayCount++;
-                                                });
-                                            }
-                                        });
-                                    } else {
-                                        displayCount = items.length;
-                                    }
-                                    return `<div class="flex flex-col items-center p-1.5 rounded-lg ${displayCount > 0 ? 'bg-indigo-50' : 'bg-gray-50'}">
+                                    const count = sData.filter(r => r.kategori === cat).length;
+                                    return `<div class="flex flex-col items-center p-1.5 rounded-lg ${count > 0 ? 'bg-indigo-50' : 'bg-gray-50'}">
                                         <span class="text-lg">${getCategoryIcon(cat)}</span>
                                         <span class="text-[8px] font-black uppercase text-gray-400 mt-0.5">${getCategoryDisplay(cat)}</span>
-                                        <span class="text-[10px] font-black ${displayCount > 0 ? 'text-indigo-600' : 'text-gray-200'}">${displayCount}</span>
+                                        <span class="text-[10px] font-black ${count > 0 ? 'text-indigo-600' : 'text-gray-200'}">${count}</span>
                                     </div>`;
                                 }).join('')}
                             </div>
@@ -645,23 +606,7 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
-        
-        function renderDetailData(k, d) { 
-            d = parseRecordData(d); 
-            if (!d) return '-'; 
-            if (k === 'Shalat Fardu') { 
-                if (typeof d !== 'object') return d; 
-                const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya']; 
-                const activePrayers = orderedKeys.filter(key => d[key] && d[key] !== 'tidak shalat' && d[key] !== 'haid');
-                const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-indigo-600">${d[key]}</span>`); 
-                const summary = `<div class="mb-1 font-black text-indigo-800">${activePrayers.length} Waktu Terisi</div>`;
-                return summary + (entries.length ? entries.join(' | ') : '-'); 
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`; 
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`; 
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`; 
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`; 
-            return JSON.stringify(d); 
-        }
+        function renderDetailData(k, d) { d = parseRecordData(d); if (!d) return '-'; if (k === 'Shalat Fardu') { if (typeof d !== 'object') return d; const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya']; const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-indigo-600">${d[key]}</span>`); return entries.length ? entries.join(' | ') : '-'; } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`; else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`; else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`; else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`; return JSON.stringify(d); }
 
         async function init() { 
             loadAllRecords(); const saved = safeGetStorage('ramadhanUser'); 
@@ -674,3 +619,4 @@
   </script>
  </body>
 </html>
+
