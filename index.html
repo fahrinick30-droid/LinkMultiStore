@@ -98,11 +98,11 @@
 
         function safeGetStorage(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
         function safeSetStorage(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
-        function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch (e) {} }
+        function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch (e) { return null; } }
         
         function loadAllRecords() {
             const saved = safeGetStorage('ramadhanAllRecords');
-            if (saved) { try { allRecords = JSON.parse(saved); } catch(e) {} }
+            if (saved) { try { allRecords = JSON.parse(saved); } catch(e) { allRecords = []; } }
         }
         function saveAllRecords() { safeSetStorage('ramadhanAllRecords', JSON.stringify(allRecords)); }
 
@@ -311,7 +311,9 @@
 
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
-            if (isAdmin()) return (showLaporanPage(), fetchAllDataForAdmin());
+            // PERBAIKAN: Jangan panggil fetchAllDataForAdmin secara otomatis agar data tetap stabil
+            if (isAdmin()) return showLaporanPage();
+            
             const config = window.elementSdk?.config || defaultConfig;
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto" style="background: ${config.background_color};">
