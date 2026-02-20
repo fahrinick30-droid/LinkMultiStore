@@ -301,6 +301,39 @@
             return foundKey ? obj[foundKey] : null;
         }
 
+        /**
+         * FUNGSI SINKRONISASI DATA SISWA DARI CLOUD
+         */
+        async function syncUserFromCloud() {
+            if (!currentUser || isAdmin() || !SCHOOL_ID) return;
+            try {
+                const url = new URL(GOOGLE_SCRIPT_URL);
+                url.searchParams.append('action', 'read');
+                url.searchParams.append('ss_id', SCHOOL_ID);
+                url.searchParams.append('nama', currentUser.nama_lengkap);
+                url.searchParams.append('kelas', currentUser.kelas);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.status === 'success' && Array.isArray(result.data)) {
+                    result.data.forEach(item => {
+                        const tgl = getValCaseInsensitive(item, 'tanggal');
+                        const cat = getValCaseInsensitive(item, 'kategori');
+                        let detail = getValCaseInsensitive(item, 'hadir') || getValCaseInsensitive(item, 'detail');
+                        if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
+                        
+                        if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
+                        else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
+                        else if (cat === 'Puasa') puasaData[tgl] = (typeof detail === 'object' ? detail.status : detail);
+                        else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
+                        else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
+                    });
+                    saveUserState();
+                    if (document.getElementById('contentArea')) renderContentArea();
+                }
+            } catch (e) { console.error("Cloud sync failed:", e); }
+        }
+
         async function fetchAllDataForAdmin() {
             if (!SCHOOL_ID) return showToast("ID Sekolah tidak ditemukan.", false);
             
@@ -308,6 +341,15 @@
             loadingToast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600 flex items-center gap-2`;
             loadingToast.innerHTML = `<span>🔄</span> Sinkronisasi database...`;
             document.body.appendChild(loadingToast);
+
+            try {
+                const checkUrl = new URL(GOOGLE_SCRIPT_URL);
+                checkUrl.searchParams.append('action', 'checkInfo');
+                checkUrl.searchParams.append('ss_id', SCHOOL_ID);
+                const checkRes = await fetch(checkUrl);
+                const checkData = await checkRes.json();
+                hasInfoFiles = checkData.hasFiles === true;
+            } catch (e) { hasInfoFiles = true; }
 
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
