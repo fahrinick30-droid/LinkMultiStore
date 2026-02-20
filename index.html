@@ -566,7 +566,7 @@
                                             const d = parseRecordData(item.hadir);
                                             if (d && typeof d === 'object') {
                                                 ['Subuh','Dzuhur','Ashar','Maghrib','Isya'].forEach(w => {
-                                                    if (d[w] && d[w] !== 'tidak shalat') displayCount++;
+                                                    if (d[w] && d[w] !== 'tidak shalat' && d[w] !== 'haid') displayCount++;
                                                 });
                                             }
                                         });
@@ -619,15 +619,16 @@
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
         function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        
         function renderDetailData(k, d) { 
             d = parseRecordData(d); 
             if (!d) return '-'; 
             if (k === 'Shalat Fardu') { 
                 if (typeof d !== 'object') return d; 
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya']; 
-                const activePrayers = orderedKeys.filter(key => d[key] && d[key] !== 'tidak shalat');
-                const entries = activePrayers.map(key => `${key}: <span class="font-bold text-indigo-600">${d[key]}</span>`); 
-                const summary = activePrayers.length > 0 ? `<div class="mb-1 font-black text-indigo-800">${activePrayers.length} Waktu Terisi:</div>` : '';
+                const activePrayers = orderedKeys.filter(key => d[key] && d[key] !== 'tidak shalat' && d[key] !== 'haid');
+                const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-indigo-600">${d[key]}</span>`); 
+                const summary = `<div class="mb-1 font-black text-indigo-800">${activePrayers.length} Waktu Terisi</div>`;
                 return summary + (entries.length ? entries.join(' | ') : '-'); 
             } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`; 
             else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`; 
