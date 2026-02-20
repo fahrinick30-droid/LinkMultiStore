@@ -165,7 +165,7 @@
             const overlay = document.createElement('div');
             overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 transition-all duration-300';
             overlay.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full transform transition-all scale-100">
+                <div class="bg-white rounded-2xl shadow-2xl p-6 max-sm w-full transform transition-all scale-100">
                     <div class="text-center">
                         <div class="mx-auto flex items-center justify-center h-14 w-14 rounded-full ${isDanger ? 'bg-rose-100' : 'bg-blue-100'} mb-4">
                             <svg class="h-8 w-8 ${isDanger ? 'text-rose-600' : 'text-blue-600'}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -468,7 +468,18 @@
                 area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Ceramah') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border-2 border-gray-50 rounded-[2rem] border-l-8 border-l-rose-500 shadow-sm bg-rose-50/20"><h3 class="font-black text-rose-900 mb-6 text-lg">📅 Hari ke-${t}</h3><div class="space-y-4 mb-6"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><input type="text" class="cr-p w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-bold" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-bold" placeholder="Tempat / Link Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"></div><textarea class="cr-r w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-semibold h-24" placeholder="Ringkasan isi ceramah..." data-t="${t}">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg hover:bg-rose-700 active:scale-95 transition-all" data-t="${t}">💾 SIMPAN DATA CERAMAH</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `
+                    <div class="p-6 border-2 border-gray-50 rounded-[2rem] border-l-8 border-l-rose-500 shadow-sm bg-rose-50/20">
+                        <h3 class="font-black text-rose-900 mb-6 text-lg">📅 Hari ke-${t}</h3>
+                        <div class="space-y-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input type="text" class="cr-p w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-bold" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}">
+                                <input type="text" class="cr-t w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-bold" placeholder="Tempat / Link Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}">
+                            </div>
+                            <textarea class="cr-r w-full p-4 border-2 border-gray-50 rounded-2xl text-sm outline-none focus:border-rose-500 font-semibold h-24" placeholder="Ringkasan isi ceramah..." data-t="${t}">${ceramahData[t]?.ringkasan || ''}</textarea>
+                        </div>
+                        <button class="sv-harian w-full py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg hover:bg-rose-700 active:scale-95 transition-all" data-t="${t}">💾 SIMPAN DATA CERAMAH</button>
+                    </div>`).join('')}</div>`;
                 area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = e.target.value; saveUserState(); });
                 area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = e.target.value; saveUserState(); });
                 area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = e.target.value; saveUserState(); });
@@ -494,11 +505,10 @@
                 hadir: JSON.stringify(detailObj) 
             };
 
-            // Tambahkan rincian per kolom agar terisi di spreadsheet
             const payload = { 
                 ss_id: SCHOOL_ID, 
                 ...record, 
-                ...detailObj, // Menyebarkan Subuh, Dzuhur, dll ke level utama
+                ...detailObj, 
                 sheet: 'Shalat Fardu' 
             };
 
@@ -507,10 +517,7 @@
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    body: JSON.stringify(payload) 
-                });
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
                 showToast(`Amalan ${wkt} Hari ${tgl} Tersimpan!`);
             } catch (e) { showToast("Koneksi cloud gagal.", false); }
             finally { btn.disabled = false; btn.textContent = oldTxt; }
@@ -538,26 +545,15 @@
             const oldTxt = btn.textContent;
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
-            const detailString = JSON.stringify(detailObj);
-            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detailString };
-            
-            // Siapkan payload dengan penyebaran rincian untuk kolom spreadsheet
-            const payload = {
-                ss_id: SCHOOL_ID,
-                ...record,
-                ...(typeof detailObj === 'object' ? detailObj : {}),
-                sheet: currentTab
-            };
+            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: JSON.stringify(detailObj) };
+            const payload = { ss_id: SCHOOL_ID, ...record, ...(typeof detailObj === 'object' ? detailObj : {}), sheet: currentTab };
 
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === currentTab && r.tanggal == tgl));
             allRecords.push(record);
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    body: JSON.stringify(payload) 
-                });
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
                 showToast(`Data ${currentTab} Hari ${tgl} Berhasil!`);
             } catch (e) { showToast("Gagal terhubung ke Cloud.", false); }
             finally { btn.disabled = false; btn.textContent = oldTxt; }
@@ -754,7 +750,7 @@
             const overlay = document.createElement('div');
             overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4';
             overlay.innerHTML = `
-                <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full">
+                <div class="bg-white rounded-3xl shadow-2xl p-8 max-sm w-full">
                     <h3 class="text-2xl font-black text-slate-800 mb-6 border-b pb-4">Opsi Cetak Laporan</h3>
                     <div class="space-y-5 mb-8">
                         <div>
@@ -869,11 +865,11 @@
             if (!d) return '-'; 
             if (k === 'Shalat Fardu') {
                 const ordered = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                return ordered.filter(key => d[key]).map(key => `${key}: <span class="text-indigo-600">${d[key]}</span>`).join(' | ') || '-';
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Tempat: <b>${d.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || d || '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan === 'sendiri' ? 'Sendiri' : 'Simakan'}</b>, Surat: <b>${d.surat || '-'}</b> (Ayat: ${d.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Media: <b>${d.tempat || '-'}</b><br><span class="text-[11px] text-slate-400 italic font-normal">"${d.ringkasan || '-'}"</span>`;
+                return ordered.filter(key => d[key]).map(key => `${key}: <span class="text-indigo-600 font-bold">${d[key]}</span>`).join(' | ') || '-';
+            } else if (k === 'Tarawih') return `Status: <span class="text-indigo-600 font-bold">${d.status || '-'}</span>, Tempat: <span class="text-indigo-600 font-bold">${d.tempat || '-'}</span>`;
+            else if (k === 'Puasa') return `Status: <span class="text-orange-600 font-bold">${typeof d === 'string' ? d : (d.status || d || '-')}</span>`;
+            else if (k === 'Tadarus') return `Metode: <span class="text-blue-600 font-bold">${d.pilihan === 'sendiri' ? 'Sendiri' : 'Simakan'}</span>, Surat: <span class="text-blue-600 font-bold">${d.surat || '-'}</span> (Ayat: ${d.ayat || '-'})`;
+            else if (k === 'Ceramah') return `Penceramah: <span class="text-rose-600 font-bold">${d.penceramah || '-'}</span>, Media: <span class="text-rose-600 font-bold">${d.tempat || '-'}</span><br><span class="text-[11px] text-slate-400 italic font-normal">"${d.ringkasan || '-'}"</span>`;
             return JSON.stringify(d);
         }
 
