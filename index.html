@@ -327,17 +327,34 @@
                         const tgl = item.tanggal;
                         const cat = item.kategori;
                         let detail = item.detail || item.hadir;
-                        if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
                         
-                        const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: cat, tanggal: tgl, hadir: JSON.stringify(detail) };
-                        // Logika penggabungan baris yang sama di memory
+                        // Parse JSON dengan aman
+                        if (typeof detail === 'string' && (detail.startsWith('{') || detail.startsWith('['))) { 
+                            try { detail = JSON.parse(detail); } catch(e) {} 
+                        }
+                        
+                        const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: cat, tanggal: tgl, hadir: (typeof detail === 'object' ? JSON.stringify(detail) : detail) };
+                        
+                        // Gunakan logika penggabungan yang diperbaiki
                         processLocalRecord(record);
 
-                        if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
-                        else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
-                        else if (cat === 'Puasa') puasaData[tgl] = (typeof detail === 'object' ? detail.status : detail);
-                        else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
-                        else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
+                        if (cat === 'Shalat Fardu') {
+                            // Hanya gabungkan jika detail adalah objek
+                            if (typeof detail === 'object' && detail !== null) {
+                                shalatData[tgl] = { ...shalatData[tgl], ...detail };
+                            } else if (typeof detail === 'string') {
+                                // Jika server mengirimkan string tunggal (misal karena input lama), simpan di Subuh sebagai fallback
+                                shalatData[tgl] = { ...shalatData[tgl], 'Subuh': detail };
+                            }
+                        } else if (cat === 'Tarawih') {
+                            if (typeof detail === 'object' && detail !== null) tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
+                        } else if (cat === 'Puasa') {
+                            puasaData[tgl] = (typeof detail === 'object' ? detail.status : detail);
+                        } else if (cat === 'Tadarus') {
+                            if (typeof detail === 'object' && detail !== null) tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
+                        } else if (cat === 'Ceramah') {
+                            if (typeof detail === 'object' && detail !== null) ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
+                        }
                     });
                     saveAllRecords();
                     saveUserState();
@@ -347,18 +364,20 @@
         }
 
         function processLocalRecord(record) {
-            // Find existing
-            const existing = allRecords.find(r => r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal);
-            if (existing && record.kategori === 'Shalat Fardu') {
-                let existingHadir = parseRecordData(existing.hadir);
+            const existingIdx = allRecords.findIndex(r => r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal);
+            
+            if (existingIdx !== -1 && record.kategori === 'Shalat Fardu') {
+                let existingHadir = parseRecordData(allRecords[existingIdx].hadir);
                 let newHadir = parseRecordData(record.hadir);
-                if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
-                    existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
+                
+                // Pastikan keduanya objek sebelum merge
+                if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
+                    allRecords[existingIdx].hadir = JSON.stringify({ ...existingHadir, ...newHadir });
                 } else {
-                    existing.hadir = record.hadir;
+                    allRecords[existingIdx].hadir = record.hadir;
                 }
-            } else if (existing) {
-                existing.hadir = record.hadir;
+            } else if (existingIdx !== -1) {
+                allRecords[existingIdx].hadir = record.hadir;
             } else {
                 allRecords.push(record);
             }
@@ -525,13 +544,23 @@
         }
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-        function parseRecordData(d) { try { if (!d) return null; return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
+        
+        function parseRecordData(d) { 
+            try { 
+                if (!d) return null; 
+                if (typeof d === 'object') return d;
+                if (typeof d === 'string' && (d.startsWith('{') || d.startsWith('['))) return JSON.parse(d);
+                return d; 
+            } catch (e) { return d; } 
+        }
         
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             if (!d) return '-'; 
             if (k === 'Shalat Fardu') {
+                // Tampilan fallback jika d adalah string tunggal
                 if (typeof d !== 'object' || d === null) return `<span class="font-bold text-emerald-600">${d}</span>`;
+                
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
                 const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
                 return entries.length ? entries.join(' | ') : '-';
@@ -539,7 +568,7 @@
             else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
             else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
             else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
-            return JSON.stringify(d);
+            return typeof d === 'object' ? JSON.stringify(d) : d;
         }
 
         function getMergedRecords(records) {
@@ -550,7 +579,8 @@
                     let existing = map.get(key);
                     let existingHadir = parseRecordData(existing.hadir);
                     let newHadir = parseRecordData(r.hadir);
-                    if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
+                    
+                    if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
                         existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
                     } else {
                         map.set(key, r);
@@ -619,7 +649,6 @@
                 const result = await res.json();
                 
                 if (result.status === 'success') {
-                    // Logic to deep merge records from spreadsheet
                     const rawData = result.data;
                     const mergedDataMap = new Map();
                     
@@ -627,15 +656,20 @@
                         const key = `${item.nama}-${item.kelas}-${item.kategori}-${item.tanggal}`;
                         let hadir = item.detail || item.hadir;
                         
+                        // Parse JSON jika baris data berupa string JSON
+                        if (typeof hadir === 'string' && hadir.startsWith('{')) {
+                            try { hadir = JSON.parse(hadir); } catch(e) {}
+                        }
+                        
                         if (mergedDataMap.has(key) && item.kategori === 'Shalat Fardu') {
                             let existing = mergedDataMap.get(key);
                             let existingHadir = parseRecordData(existing.hadir);
                             let newHadir = parseRecordData(hadir);
                             
-                            if (typeof existingHadir === 'object' && typeof newHadir === 'object') {
+                            if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
                                 existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
                             } else {
-                                mergedDataMap.set(key, { ...item, hadir: JSON.stringify(hadir) });
+                                mergedDataMap.set(key, { ...item, hadir: (typeof hadir === 'object' ? JSON.stringify(hadir) : hadir) });
                             }
                         } else {
                             mergedDataMap.set(key, { ...item, hadir: (typeof hadir === 'object' ? JSON.stringify(hadir) : hadir) });
