@@ -485,13 +485,32 @@
             const oldTxt = btn.textContent;
             btn.disabled = true; btn.textContent = '...';
             
-            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: JSON.stringify(shalatData[tgl]) };
+            const detailObj = shalatData[tgl];
+            const record = { 
+                nama: currentUser.nama, 
+                kelas: currentUser.kelas, 
+                kategori: 'Shalat Fardu', 
+                tanggal: tgl, 
+                hadir: JSON.stringify(detailObj) 
+            };
+
+            // Tambahkan rincian per kolom agar terisi di spreadsheet
+            const payload = { 
+                ss_id: SCHOOL_ID, 
+                ...record, 
+                ...detailObj, // Menyebarkan Subuh, Dzuhur, dll ke level utama
+                sheet: 'Shalat Fardu' 
+            };
+
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === 'Shalat Fardu' && r.tanggal == tgl));
             allRecords.push(record); 
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu' }) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify(payload) 
+                });
                 showToast(`Amalan ${wkt} Hari ${tgl} Tersimpan!`);
             } catch (e) { showToast("Koneksi cloud gagal.", false); }
             finally { btn.disabled = false; btn.textContent = oldTxt; }
@@ -500,34 +519,45 @@
         async function handleSimpanHarian(tgl) {
             if (!SCHOOL_ID) return showToast("Error: ID Sekolah tidak valid.", false);
             
+            let detailObj = null;
             if (currentTab === 'Tarawih') {
-                const d = tarawihData[tgl]; if (!d.status || !d.tempat) return showToast("Pilih Status dan Tempat!", false);
+                detailObj = tarawihData[tgl];
+                if (!detailObj.status || !detailObj.tempat) return showToast("Pilih Status dan Tempat!", false);
             } else if (currentTab === 'Puasa') {
+                detailObj = { status: puasaData[tgl] };
                 if (!puasaData[tgl]) return showToast("Pilih Status Puasa!", false);
             } else if (currentTab === 'Tadarus') {
-                const d = tadarusData[tgl]; if (!d.pilihan || !d.surat.trim() || !d.ayat.trim()) return showToast("Lengkapi data Tadarus!", false);
+                detailObj = tadarusData[tgl];
+                if (!detailObj.pilihan || !detailObj.surat.trim() || !detailObj.ayat.trim()) return showToast("Lengkapi data Tadarus!", false);
             } else if (currentTab === 'Ceramah') {
-                const d = ceramahData[tgl]; if (!d.penceramah.trim() || !d.ringkasan.trim()) return showToast("Lengkapi data Ceramah!", false);
+                detailObj = ceramahData[tgl];
+                if (!detailObj.penceramah.trim() || !detailObj.ringkasan.trim()) return showToast("Lengkapi data Ceramah!", false);
             }
 
             const btn = document.querySelector(`.sv-harian[data-t="${tgl}"]`);
             const oldTxt = btn.textContent;
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
-            let detail = "";
-            if (currentTab === 'Shalat Fardu') detail = JSON.stringify(shalatData[tgl]);
-            else if (currentTab === 'Tarawih') detail = JSON.stringify(tarawihData[tgl]);
-            else if (currentTab === 'Puasa') detail = JSON.stringify(puasaData[tgl]);
-            else if (currentTab === 'Tadarus') detail = JSON.stringify(tadarusData[tgl]);
-            else if (currentTab === 'Ceramah') detail = JSON.stringify(ceramahData[tgl]);
+            const detailString = JSON.stringify(detailObj);
+            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detailString };
             
-            const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detail };
+            // Siapkan payload dengan penyebaran rincian untuk kolom spreadsheet
+            const payload = {
+                ss_id: SCHOOL_ID,
+                ...record,
+                ...(typeof detailObj === 'object' ? detailObj : {}),
+                sheet: currentTab
+            };
+
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === currentTab && r.tanggal == tgl));
             allRecords.push(record);
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab }) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify(payload) 
+                });
                 showToast(`Data ${currentTab} Hari ${tgl} Berhasil!`);
             } catch (e) { showToast("Gagal terhubung ke Cloud.", false); }
             finally { btn.disabled = false; btn.textContent = oldTxt; }
