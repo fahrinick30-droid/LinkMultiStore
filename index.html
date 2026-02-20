@@ -443,10 +443,23 @@
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
-            const record = { ss_id: SCHOOL_ID, nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: JSON.stringify(shalatData[tgl]) };
+            const record = { 
+                ss_id: SCHOOL_ID, 
+                nama: currentUser.nama, 
+                kelas: currentUser.kelas, 
+                kategori: 'Shalat Fardu', 
+                tanggal: tgl, 
+                hadir: JSON.stringify(shalatData[tgl]),
+                sheet: 'Shalat Fardu',
+                shalat_detail: shalatData[tgl]
+            };
             
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors',
+                    body: JSON.stringify(record) 
+                });
                 showToast(`${wkt} hari ke-${tgl} disimpan!`);
             } catch (e) { showToast("Gagal menyimpan ke awan.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${wkt.toUpperCase()}`; }
@@ -454,19 +467,35 @@
 
         async function handleSimpanHarian(tgl) {
             if (!SCHOOL_ID) return showToast("ID Sekolah hilang.", false);
-            let detail = "";
-            if (currentTab === 'Tarawih') detail = JSON.stringify(tarawihData[tgl]);
-            else if (currentTab === 'Puasa') detail = JSON.stringify(puasaData[tgl]);
-            else if (currentTab === 'Tadarus') detail = JSON.stringify(tadarusData[tgl]);
-            else if (currentTab === 'Ceramah') detail = JSON.stringify(ceramahData[tgl]);
+            let detailObj = null;
+            if (currentTab === 'Tarawih') detailObj = tarawihData[tgl];
+            else if (currentTab === 'Puasa') detailObj = { status: puasaData[tgl] };
+            else if (currentTab === 'Tadarus') detailObj = tadarusData[tgl];
+            else if (currentTab === 'Ceramah') detailObj = ceramahData[tgl];
 
             const btn = document.querySelector(`.sv-harian[data-t="${tgl}"]`);
             btn.disabled = true; btn.textContent = 'SEDANG MENGIRIM...';
 
-            const record = { ss_id: SCHOOL_ID, nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detail };
+            const record = { 
+                ss_id: SCHOOL_ID, 
+                nama: currentUser.nama, 
+                kelas: currentUser.kelas, 
+                kategori: currentTab, 
+                tanggal: tgl, 
+                hadir: JSON.stringify(detailObj),
+                sheet: currentTab,
+                tarawih_detail: currentTab === 'Tarawih' ? detailObj : undefined,
+                puasa_detail: currentTab === 'Puasa' ? detailObj : undefined,
+                tadarus_detail: currentTab === 'Tadarus' ? detailObj : undefined,
+                ceramah_detail: currentTab === 'Ceramah' ? detailObj : undefined
+            };
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors',
+                    body: JSON.stringify(record) 
+                });
                 showToast(`Data hari ke-${tgl} berhasil disimpan!`);
             } catch (e) { showToast("Gagal terhubung ke Cloud.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${currentTab.toUpperCase()}`; }
