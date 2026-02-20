@@ -45,7 +45,6 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
         
-        /* Animasi dari sistem lama */
         @keyframes pulseBlue {
           0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
           70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
@@ -63,22 +62,16 @@
  <body class="h-full bg-gray-50">
   <div id="app" class="w-full h-full overflow-auto"></div>
   <script>
-        /**
-         * KONFIGURASI SISTEM LAMA (MULTI-SCHOOL)
-         */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
         const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
-        // Logika ID Sekolah (Sistem Lama)
         function getSchoolId() {
             const params = new URLSearchParams(window.location.search);
             let id = params.get('id');
             if (!id && window.location.href.includes('id=')) {
                 id = window.location.href.split('id=')[1].split('&')[0];
             }
-            if (!id) {
-                id = sessionStorage.getItem('current_school_id');
-            }
+            if (!id) id = sessionStorage.getItem('current_school_id');
             return id;
         }
 
@@ -131,7 +124,6 @@
 
         function getUserStateKey() {
             if (!currentUser) return null;
-            // PENTING: Gunakan 'nama' agar konsisten dengan data lama
             return `ramadhanState_${currentUser.nama.replace(/\s+/g, '_')}_${currentUser.kelas}`;
         }
 
@@ -203,7 +195,6 @@
 
         function isAdmin() { return currentUser && currentUser.nama === '*'; }
 
-        // --- SISTEM LAMA: REGISTRASI SEKOLAH ---
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -234,18 +225,12 @@
                 const btn = document.getElementById('regBtn');
                 const emailInput = document.getElementById('regEmail').value;
                 const schoolInput = document.getElementById('regSchool').value;
-                
                 const localHistory = JSON.parse(localStorage.getItem('reg_history') || '[]');
                 const isDuplicate = localHistory.some(item => 
                     item.email.toLowerCase() === emailInput.trim().toLowerCase() && 
                     item.school.toLowerCase() === schoolInput.trim().toLowerCase()
                 );
-
-                if (isDuplicate) {
-                    showToast("Gmail dan Sekolah ini sudah digunakan!", false);
-                    return;
-                }
-
+                if (isDuplicate) return showToast("Gmail dan Sekolah ini sudah digunakan!", false);
                 btn.disabled = true; btn.textContent = "Memproses...";
                 try {
                     const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ 
@@ -257,7 +242,6 @@
                     if (data.ss_id) {
                         localHistory.push({ email: emailInput, school: schoolInput });
                         localStorage.setItem('reg_history', JSON.stringify(localHistory));
-
                         document.getElementById('regResult').classList.remove('hidden');
                         sessionStorage.setItem('current_school_id', data.ss_id);
                         document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
@@ -294,7 +278,6 @@
 
         window.downloadLink = () => {
             const link = document.getElementById('shareLink').value;
-            // PERBAIKAN: Menghapus instruksi pilih kelas
             const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Klik Masuk.\n\nGunakan Panel Guru untuk memantau rekap amalan dan mencetak laporan siswa secara otomatis.`;
             const blob = new Blob([textContent], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
@@ -312,7 +295,6 @@
                 url.searchParams.append('ss_id', SCHOOL_ID);
                 url.searchParams.append('nama', currentUser.nama);
                 url.searchParams.append('kelas', currentUser.kelas);
-                
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
@@ -320,8 +302,10 @@
                         const tgl = item.tanggal;
                         const cat = item.kategori;
                         let detail = item.detail || item.hadir;
+                        if (!detail && cat === 'Shalat Fardu') {
+                            detail = { Subuh: item.Subuh, Dzuhur: item.Dzuhur, Ashar: item.Ashar, Maghrib: item.Maghrib, Isya: item.Isya };
+                        }
                         if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch(e) {} }
-                        
                         if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
                         else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
@@ -340,7 +324,6 @@
             loadingToast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600 flex items-center gap-2`;
             loadingToast.innerHTML = `<span>🔄</span> Sinkronisasi database...`;
             document.body.appendChild(loadingToast);
-            
             try {
                 const checkUrl = new URL(GOOGLE_SCRIPT_URL);
                 checkUrl.searchParams.append('action', 'checkInfo');
@@ -348,7 +331,6 @@
                 const checkData = await checkRes.json();
                 hasInfoFiles = checkData.hasFiles === true;
             } catch (e) { hasInfoFiles = true; }
-
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('action', 'readAll');
@@ -356,9 +338,26 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    allRecords = result.data.map(item => ({
-                        nama: item.nama, kelas: item.kelas, kategori: item.kategori, tanggal: item.tanggal, hadir: item.detail || item.hadir
-                    }));
+                    allRecords = result.data.map(item => {
+                        // LOGIKA PERBAIKAN: Jika kolom Shalat terpisah di Spreadsheet (Subuh, Dzuhur, dll)
+                        let detail = item.detail || item.hadir;
+                        if (!detail && item.kategori === 'Shalat Fardu') {
+                            detail = JSON.stringify({
+                                Subuh: item.Subuh || '-',
+                                Dzuhur: item.Dzuhur || '-',
+                                Ashar: item.Ashar || '-',
+                                Maghrib: item.Maghrib || '-',
+                                Isya: item.Isya || '-'
+                            });
+                        }
+                        return {
+                            nama: item.nama, 
+                            kelas: item.kelas, 
+                            kategori: item.kategori, 
+                            tanggal: item.tanggal, 
+                            hadir: detail
+                        };
+                    });
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
                     showToast("Database Sinkron!");
@@ -399,9 +398,7 @@
                 const kelas = document.getElementById('kelas').value.trim();
                 const admin = nama === '*';
                 if (!admin && (!nama || !kelas)) return showToast("Mohon isi nama dan kelas", false);
-                
                 if (!admin) { safeSetStorage('last_nama', nama); safeSetStorage('last_kelas', kelas); }
-                
                 currentUser = { nama: nama, kelas: admin ? '*' : kelas, password: admin ? '*' : '' };
                 safeSetStorage('ramadhanUser', JSON.stringify(currentUser));
                 loadUserState();
@@ -449,7 +446,6 @@
         function renderContentArea() {
             const area = document.getElementById('contentArea');
             const days = Array.from({length: 30}, (_, i) => i + 1);
-            
             if (currentTab === 'Shalat Fardu') {
                 area.innerHTML = `<div class="space-y-8">${days.map(t => `
                     <div class="p-5 border rounded-2xl bg-white shadow-sm border-l-8 border-emerald-500">
@@ -500,12 +496,10 @@
             if (!status) return showToast(`Sila pilih status untuk shalat ${wkt} terlebih dahulu!`, false);
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             if (btn) { btn.disabled = true; btn.textContent = '...'; }
-            
             const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: 'Shalat Fardu', tanggal: tgl, hadir: JSON.stringify(shalatData[tgl]) };
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === 'Shalat Fardu' && r.tanggal == tgl));
             allRecords.push(record); 
             saveAllRecords();
-
             try {
                 await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: 'Shalat Fardu', shalat_detail: shalatData[tgl] }) });
                 showToast(`Data ${wkt} Hari ke-${tgl} disimpan!`);
@@ -515,7 +509,6 @@
 
         async function handleSimpanHarian(tgl) {
             if (!SCHOOL_ID) return showToast("Error: ID Sekolah tidak ditemukan.", false);
-            
             if (currentTab === 'Tarawih') {
                 const d = tarawihData[tgl]; if (!d || !d.status || !d.tempat) return showToast("Sila pilih Status dan Tempat!", false);
             } else if (currentTab === 'Puasa') {
@@ -533,13 +526,10 @@
             else if (currentTab === 'Puasa') detail = JSON.stringify(puasaData[tgl]);
             else if (currentTab === 'Tadarus') detail = JSON.stringify(tadarusData[tgl]);
             else if (currentTab === 'Ceramah') detail = JSON.stringify(ceramahData[tgl]);
-            
             const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: currentTab, tanggal: tgl, hadir: detail };
-            
             allRecords = allRecords.filter(r => !(r.nama === currentUser.nama && r.kelas === currentUser.kelas && r.kategori === currentTab && r.tanggal == tgl));
             allRecords.push(record);
             saveAllRecords();
-
             try {
                 await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ss_id: SCHOOL_ID, ...record, sheet: currentTab, shalat_detail: shalatData[tgl], tarawih_detail: tarawihData[tgl], puasa_detail: puasaData[tgl], tadarus_detail: tadarusData[tgl], ceramah_detail: ceramahData[tgl] }) });
                 showToast(`Data Hari ke-${tgl} berhasil dikirim!`);
@@ -559,8 +549,7 @@
         function showRekapPage() {
             const myRaw = allRecords.filter(r => r.nama === currentUser.nama && r.kelas === currentUser.kelas);
             const my = getMergedRecords(myRaw);
-
-            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Amalan Saya</h1><p class="text-gray-500">Ringkasan data terbaru untuk setiap harinya.</p></div><button id="backBtn" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI MENGISI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${getCategoryIcon(cat)} ${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300 whitespace-nowrap">HARI ${r.tanggal}</span><div class="flex-1 text-gray-700">${renderDetailData(cat, parseRecordData(r.hadir))}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data tersimpan.</p>'}</div></div>`; }).join('')}</div></div></div>`;
+            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Amalan Saya</h1><p class="text-gray-500">Ringkasan data terbaru untuk setiap harinya.</p></div><button id="backBtn" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI MENGISI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${getCategoryIcon(cat)} ${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300 whitespace-nowrap">HARI ${r.tanggal}</span><div class="flex-1 text-gray-700">${renderDetailData(cat, r.hadir)}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data tersimpan.</p>'}</div></div>`; }).join('')}</div></div></div>`;
             document.getElementById('backBtn').onclick = showAmalanPage;
         }
 
@@ -570,12 +559,9 @@
             if (tingkat !== "Semua") students = students.filter(s => s.kelas.startsWith(tingkat));
             if (kelas !== "Semua") students = students.filter(s => s.kelas.endsWith(kelas));
             students.sort((a,b) => a.nama.localeCompare(b.nama));
-
             if (students.length === 0) return showToast("Tidak ada data siswa untuk filter ini", false);
-
             const printWindow = window.open('', '_blank');
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            
             let html = `<html><head><title>Rekapitulasi Amalan Ramadhan</title><style>
                 body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
                 .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
@@ -587,12 +573,10 @@
             </style></head><body>
                 <div class="header"><h1>Rekapitulasi Amalan Ramadhan Siswa</h1><div>Filter: Tingkat ${tingkat} | Kelas ${kelas}</div><div>Tahun Pelajaran 2025/2026</div></div>
                 <table><thead><tr><th>No</th><th>Nama Siswa</th><th>Kelas</th><th>Total Data</th><th>Status</th></tr></thead><tbody>`;
-            
             students.forEach((s, idx) => {
                 const count = allMerged.filter(r => r.nama === s.nama && r.kelas === s.kelas).length;
                 html += `<tr><td>${idx+1}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${count}</td><td>${count > 0 ? 'Aktif' : 'Belum Ada'}</td></tr>`;
             });
-
             html += `</tbody></table>
                 <div class="footer"><div class="sig"><div>Sumedang, ${dateStr}</div><div style="font-weight:bold; margin-bottom: 60px;">Guru PAI</div><div>( ........................................ )</div></div></div>
                 <script>window.onload = () => window.print();<\/script></body></html>`;
@@ -618,7 +602,6 @@
         function showLaporanPage() {
             const allMerged = getMergedRecords(allRecords);
             const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
-            
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-100 p-4 md:p-6">
                     <div class="max-w-6xl mx-auto">
@@ -631,38 +614,17 @@
                                 <button id="adminLogOut" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">KELUAR</button>
                             </div>
                         </div>
-
                         <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Tingkatan</label>
-                                    <select id="filterTingkat" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500">
-                                        <option value="all">Semua Tingkat</option>
-                                        <option value="7">Kelas 7</option>
-                                        <option value="8">Kelas 8</option>
-                                        <option value="9">Kelas 9</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Kelas</label>
-                                    <select id="filterKelas" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500">
-                                        <option value="all">Semua Kelas (A-J)</option>
-                                        ${['A','B','C','D','E','F','G','H','I','J'].map(k => `<option value="${k}">${k}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Cari Nama</label>
-                                    <input type="text" id="searchNama" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500" placeholder="Ketik nama siswa...">
-                                </div>
+                                <div><label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Tingkatan</label><select id="filterTingkat" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500"><option value="all">Semua Tingkat</option><option value="7">Kelas 7</option><option value="8">Kelas 8</option><option value="9">Kelas 9</option></select></div>
+                                <div><label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Kelas</label><select id="filterKelas" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500"><option value="all">Semua Kelas (A-J)</option>${['A','B','C','D','E','F','G','H','I','J'].map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
+                                <div><label class="block text-[10px] font-black text-gray-400 mb-1 uppercase tracking-widest">Cari Nama</label><input type="text" id="searchNama" class="w-full p-2 border-2 border-gray-100 rounded-xl bg-gray-50 outline-none focus:border-emerald-500" placeholder="Ketik nama siswa..."></div>
                             </div>
                         </div>
-
                         <div id="studentListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                     </div>
                 </div>`;
-
             let filterT = 'all', filterK = 'all', searchN = '';
-
             const renderFilteredStudents = () => {
                 const filtered = allS.filter(s => {
                     const matchT = filterT === 'all' || s.kelas.startsWith(filterT);
@@ -670,42 +632,31 @@
                     const matchN = s.nama.toLowerCase().includes(searchN.toLowerCase());
                     return matchT && matchK && matchN;
                 });
-
                 const grid = document.getElementById('studentListGrid');
                 if (filtered.length === 0) {
                     grid.innerHTML = `<div class="col-span-full p-12 bg-white rounded-2xl text-center text-gray-400 italic">Siswa tidak ditemukan.</div>`;
                     return;
                 }
-
                 grid.innerHTML = filtered.map(s => `
                     <div class="bg-white p-5 rounded-2xl shadow-sm border hover:border-emerald-500 cursor-pointer transition-all student-card" data-n="${s.nama}" data-k="${s.kelas}">
                         <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-black text-gray-800">${s.nama}</h3>
-                                <p class="text-xs font-bold text-emerald-600 mt-1">Kelas: ${s.kelas}</p>
-                            </div>
+                            <div><h3 class="font-black text-gray-800">${s.nama}</h3><p class="text-xs font-bold text-emerald-600 mt-1">Kelas: ${s.kelas}</p></div>
                             <span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg font-bold border border-emerald-100">Lihat Rincian</span>
                         </div>
                         <p class="text-[10px] text-gray-400 mt-3 flex items-center gap-1"><span>📑</span> Klik untuk detail amalan lengkap</p>
                     </div>`).join('');
-
                 grid.querySelectorAll('.student-card').forEach(c => c.onclick = (e) => {
                     const d = e.currentTarget.dataset;
                     showStudentDetail({ nama: d.n, kelas: d.k });
                 });
             };
-
             document.getElementById('filterTingkat').onchange = (e) => { filterT = e.target.value; renderFilteredStudents(); };
             document.getElementById('filterKelas').onchange = (e) => { filterK = e.target.value; renderFilteredStudents(); };
             document.getElementById('searchNama').oninput = (e) => { searchN = e.target.value; renderFilteredStudents(); };
-            
             document.getElementById('syncBtn').onclick = fetchAllDataForAdmin;
-            if(document.getElementById('infoBtn')) {
-                document.getElementById('infoBtn').onclick = () => window.open(INFO_DRIVE_URL, '_blank');
-            }
+            if(document.getElementById('infoBtn')) document.getElementById('infoBtn').onclick = () => window.open(INFO_DRIVE_URL, '_blank');
             document.getElementById('cetakGlobalBtn').onclick = showCetakDialog;
             document.getElementById('adminLogOut').onclick = handleLogout;
-
             renderFilteredStudents();
         }
 
@@ -725,16 +676,14 @@
             </style></head><body>
                 <div class="header"><h1>LAPORAN AMALAN RAMADHAN SISWA</h1><div>Tahun 1447 H / 2026 M</div></div>
                 <div class="info"><b>Nama:</b> ${student.nama}<br><b>Kelas:</b> ${student.kelas}</div>`;
-            
             categories.forEach(cat => {
                 const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
                 if(recs.length > 0) {
                     html += `<h3>${getCategoryIcon(cat)} ${cat}</h3><table class="tbl"><thead><tr><th width="80">Hari Ke-</th><th>Keterangan Amalan</th></tr></thead><tbody>`;
-                    recs.forEach(r => { html += `<tr><td>${r.tanggal}</td><td>${renderDetailData(cat, parseRecordData(r.hadir))}</td></tr>`; });
+                    recs.forEach(r => { html += `<tr><td>${r.tanggal}</td><td>${renderDetailData(cat, r.hadir)}</td></tr>`; });
                     html += `</tbody></table>`;
                 }
             });
-
             html += `<div class="footer"><div class="sig"><div>Mengetahui,</div><div style="margin-bottom: 5px;">Sumedang, ${dateStr}</div><div style="font-weight:bold;">Guru PAI</div><div style="height:70px;"></div><div style="font-weight:bold;">( ........................................ )</div><div style="font-size:11px;">NIP. ................................</div></div></div>
                 <script>window.onload = () => window.print();<\/script></body></html>`;
             printWindow.document.write(html);
@@ -744,7 +693,6 @@
         function showStudentDetail(s) {
             const dataRaw = allRecords.filter(r => r.nama === s.nama && r.kelas === s.kelas);
             const data = getMergedRecords(dataRaw);
-
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-50 p-6">
                     <div class="max-w-4xl mx-auto">
@@ -758,7 +706,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             ${categories.map(cat => {
                                 const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
-                                return `<div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-black border-b pb-2 mb-4 text-slate-700">${getCategoryIcon(cat)} ${cat}</h3><div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, parseRecordData(r.hadir))}</div>`).join('') : '<p class="text-xs text-gray-400">Belum ada data.</p>'}</div></div>`;
+                                return `<div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-black border-b pb-2 mb-4 text-slate-700">${getCategoryIcon(cat)} ${cat}</h3><div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, r.hadir)}</div>`).join('') : '<p class="text-xs text-gray-400">Belum ada data.</p>'}</div></div>`;
                             }).join('')}
                         </div>
                     </div>
@@ -777,8 +725,12 @@
             if (k === 'Shalat Fardu') {
                 if (typeof d !== 'object') return d;
                 const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                const entries = orderedKeys.filter(key => d[key]).map(key => `${key}: <span class="font-bold text-emerald-600">${d[key]}</span>`);
-                return entries.length ? entries.join(' | ') : '-';
+                // Tampilkan semua waktu yang ada isinya atau minimal beri tanda '-' jika null
+                const entries = orderedKeys.map(key => {
+                    const val = d[key] || '-';
+                    return `${key}: <span class="font-bold text-emerald-600">${val}</span>`;
+                });
+                return entries.join(' | ');
             } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
             else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
             else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
@@ -789,8 +741,6 @@
         async function init() { 
             loadAllRecords(); 
             const saved = safeGetStorage('ramadhanUser'); 
-            
-            // Cek apakah sudah terdaftar (punya ID Sekolah)
             if (!SCHOOL_ID) {
                 renderRegistration();
             } else {
@@ -801,18 +751,13 @@
                         showAmalanPage(); 
                         if (!isAdmin()) setTimeout(syncUserFromCloud, 500); 
                     } catch (e) { 
-                        safeRemoveStorage('ramadhanUser'); 
-                        currentUser = null; 
-                        showLoginPage(); 
+                        safeRemoveStorage('ramadhanUser'); currentUser = null; showLoginPage(); 
                     } 
-                } else { 
-                    showLoginPage(); 
-                }
+                } else { showLoginPage(); }
             }
             if (window.dataSdk) await window.dataSdk.init({ onDataChanged(d) { allRecords = d; saveAllRecords(); } }); 
             if (window.elementSdk) window.elementSdk.init({ defaultConfig, onConfigChange: (c) => Object.assign(window.elementSdk.config, c) }); 
         }
-
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   </script>
  </body>
