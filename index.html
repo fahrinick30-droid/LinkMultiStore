@@ -252,13 +252,13 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    // MAPPING DATA: Memastikan trim pada nama dan kelas untuk kecocokan filter
+                    // MAPPING DATA: Memastikan normalisasi string untuk filter
                     allRecords = result.data.map(item => ({
-                        nama: String(item.nama).trim(), 
-                        kelas: String(item.kelas).trim(), 
-                        kategori: item.kategori, 
-                        tanggal: item.tanggal, 
-                        hadir: item.detail // Sesuai properti 'detail' di script Apps Script
+                        nama: String(item.nama || '').trim(), 
+                        kelas: String(item.kelas || '').trim(), 
+                        kategori: String(item.kategori || '').trim(), 
+                        tanggal: String(item.tanggal || '').trim(), 
+                        hadir: item.detail 
                     }));
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
@@ -402,20 +402,22 @@
 
         function getMergedRecords(records) {
             const map = new Map();
-            records.forEach(r => map.set(`${String(r.nama).trim()}-${String(r.kelas).trim()}-${r.kategori}-${r.tanggal}`, r));
+            records.forEach(r => {
+                const key = `${String(r.nama || '').trim().toLowerCase()}-${String(r.kelas || '').trim().toLowerCase()}-${String(r.kategori || '').trim()}-${String(r.tanggal || '').trim()}`;
+                map.set(key, r);
+            });
             return Array.from(map.values());
         }
 
         function showRekapPage() {
-            const my = getMergedRecords(allRecords.filter(r => String(r.nama).trim() === String(currentUser.nama).trim() && String(r.kelas).trim() === String(currentUser.kelas).trim()));
-            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Saya</h1></div><button onclick="showAmalanPage()" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300">HARI ${r.tanggal}</span><div class="flex-1">${renderDetailData(cat, r.hadir)}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
+            const my = getMergedRecords(allRecords.filter(r => String(r.nama || '').trim().toLowerCase() === String(currentUser.nama).trim().toLowerCase() && String(r.kelas || '').trim().toLowerCase() === String(currentUser.kelas).trim().toLowerCase()));
+            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Saya</h1></div><button onclick="showAmalanPage()" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => String(r.kategori).trim() === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300">HARI ${r.tanggal}</span><div class="flex-1">${renderDetailData(cat, r.hadir)}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
         }
 
         function showLaporanPage() {
             const allMerged = getMergedRecords(allRecords);
-            // Group students by trimmed name/class to ensure uniqueness
             const allSMap = new Map();
-            allMerged.forEach(r => allSMap.set(`${String(r.nama).trim()}-${String(r.kelas).trim()}`, {nama: String(r.nama).trim(), kelas: String(r.kelas).trim()}));
+            allMerged.forEach(r => allSMap.set(`${String(r.nama).trim().toLowerCase()}-${String(r.kelas).trim().toLowerCase()}`, {nama: String(r.nama).trim(), kelas: String(r.kelas).trim()}));
             const allS = Array.from(allSMap.values()).sort((a,b) => a.nama.localeCompare(b.nama));
 
             document.getElementById('app').innerHTML = `
@@ -441,7 +443,7 @@
         }
 
         function showStudentDetail(s) {
-            const data = getMergedRecords(allRecords.filter(r => String(r.nama).trim() === s.nama && String(r.kelas).trim() === s.kelas));
+            const data = getMergedRecords(allRecords.filter(r => String(r.nama || '').trim().toLowerCase() === String(s.nama).toLowerCase() && String(r.kelas || '').trim().toLowerCase() === String(s.kelas).toLowerCase()));
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-50 p-6">
                     <div class="max-w-4xl mx-auto">
@@ -451,7 +453,7 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             ${categories.map(cat => {
-                                const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                                const recs = data.filter(r => String(r.kategori).trim() === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
                                 return `<div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-black border-b pb-2 mb-4 text-slate-700">${cat}</h3><div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, r.hadir)}</div>`).join('') : '<p class="text-xs text-gray-400 italic">Belum ada data.</p>'}</div></div>`;
                             }).join('')}
                         </div>
@@ -469,25 +471,41 @@
             const data = parseRecordData(d);
             if (!data) return '-'; 
             
-            // LOGIKA RENDERING YANG DIPERKUAT
             if (k === 'Shalat Fardu') {
-                // Jika data adalah string tunggal (misal 'berjamaah'), tampilkan langsung
-                if (typeof data === 'string' && data !== '{"' && !data.includes(':')) return data;
-                
                 const keys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                return keys.map(key => {
-                    const val = (typeof data === 'object' && data !== null) ? (data[key] || '-') : '-';
-                    return `${key}: <span class="font-bold text-emerald-600">${val}</span>`;
-                }).join(' | ');
-            } else if (k === 'Tarawih') {
-                return `Status: <b>${data.status || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b>`;
-            } else if (k === 'Puasa') {
+                
+                // Jika data berbentuk objek (format backend baru)
+                if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+                    return keys.map(key => {
+                        const val = data[key] || '-';
+                        return `${key}: <span class="font-bold text-emerald-600">${val}</span>`;
+                    }).join(' | ');
+                }
+                
+                // Jika data berbentuk string tunggal (keluhan user: "berjamaah")
+                // Kemungkinan data lama hanya mengambil kolom pertama
+                if (typeof data === 'string') return `Detail: <span class="font-bold text-emerald-600">${data}</span>`;
+            } 
+            
+            else if (k === 'Tarawih') {
+                if (typeof data === 'object') return `Status: <b>${data.status || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b>`;
+                return `Status: <b>${data}</b>`;
+            } 
+            
+            else if (k === 'Puasa') {
                 return `Status: <b>${data.status || (typeof data === 'string' ? data : '-')}</b>`;
-            } else if (k === 'Tadarus') {
-                return `Metode: <b>${data.pilihan || '-'}</b>, Surat: <b>${data.surat || '-'}</b> (${data.ayat || '-'})`;
-            } else if (k === 'Ceramah') {
-                return `Penceramah: <b>${data.penceramah || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b><br><span class="text-xs italic">"${data.ringkasan || '-'}"</span>`;
+            } 
+            
+            else if (k === 'Tadarus') {
+                if (typeof data === 'object') return `Metode: <b>${data.pilihan || '-'}</b>, Surat: <b>${data.surat || '-'}</b> (${data.ayat || '-'})`;
+                return `Detail: <b>${data}</b>`;
+            } 
+            
+            else if (k === 'Ceramah') {
+                if (typeof data === 'object') return `Penceramah: <b>${data.penceramah || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b><br><span class="text-xs italic">"${data.ringkasan || '-'}"</span>`;
+                return `Detail: <b>${data}</b>`;
             }
+            
             return typeof data === 'object' ? JSON.stringify(data) : data;
         }
 
