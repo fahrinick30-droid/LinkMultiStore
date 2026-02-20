@@ -6,7 +6,6 @@
   <title>Amalan Ramadhan Multi-School</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Error Handler Global
     window.onerror = function(msg, url, line, col, error) {
         const app = document.getElementById('app');
         if (app) {
@@ -22,18 +21,6 @@
         }
         return false;
     };
-
-    window.elementSdk = {
-        config: {},
-        init: (options) => {
-            if (options.onConfigChange) options.onConfigChange(options.defaultConfig);
-        },
-        setConfig: (conf) => { Object.assign(window.elementSdk.config, conf); }
-    };
-    window.dataSdk = {
-        init: () => Promise.resolve({ isOk: true }),
-        create: (data) => Promise.resolve({ isOk: true })
-    };
   </script>
   <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
@@ -44,6 +31,7 @@
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
         
         @keyframes pulseBlue {
           0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
@@ -57,7 +45,6 @@
         }
         .pulse-blue { animation: pulseBlue 2s infinite; }
         .pulse-green { animation: pulseGreen 2s infinite; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
  </head>
  <body class="h-full bg-gray-50">
@@ -74,24 +61,14 @@
             if (!id && window.location.href.includes('id=')) {
                 id = window.location.href.split('id=')[1].split('&')[0];
             }
-            if (!id) {
-                id = sessionStorage.getItem('current_school_id');
-            }
-            return id;
+            return id || sessionStorage.getItem('current_school_id');
         }
 
         let SCHOOL_ID = getSchoolId();
-
         const defaultConfig = {
             app_title: "Amalan Ramadhan Siswa",
             welcome_message: "Selamat datang di aplikasi Amalan Ramadhan",
-            background_color: "#10b981",
-            surface_color: "#ffffff",
-            text_color: "#1f2937",
-            primary_action_color: "#059669",
-            secondary_action_color: "#6b7280",
-            font_family: "Plus Jakarta Sans",
-            font_size: 16
+            background_color: "#10b981"
         };
 
         let currentUser = null;
@@ -110,95 +87,167 @@
                 shalatData[i] = { 'Subuh': null, 'Dzuhur': null, 'Ashar': null, 'Maghrib': null, 'Isya': null };
                 tarawihData[i] = { status: null, tempat: null };
                 puasaData[i] = null;
-                tadarusData[i] = { pilihan: null, surat: '', ayat: '', ustadz: '' };
-                ceramahData[i] = { penceramah: '', tempat: '', media: '', ringkasan: '' };
+                tadarusData[i] = { pilihan: null, surat: '', ayat: '' };
+                ceramahData[i] = { penceramah: '', tempat: '', ringkasan: '' };
             }
         }
         initDefaultData();
 
-        function safeGetStorage(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
-        function safeSetStorage(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
-        function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch (e) {} }
-        
+        const safeGetStorage = (k) => localStorage.getItem(k);
+        const safeSetStorage = (k, v) => localStorage.setItem(k, v);
+        const safeRemoveStorage = (k) => localStorage.removeItem(k);
+
+        function saveAllRecords() { safeSetStorage('ramadhanAllRecords', JSON.stringify(allRecords)); }
         function loadAllRecords() {
             const saved = safeGetStorage('ramadhanAllRecords');
-            if (saved) { try { allRecords = JSON.parse(saved); } catch(e) {} }
+            if (saved) { try { allRecords = JSON.parse(saved); } catch(e) { allRecords = []; } }
         }
-        function saveAllRecords() { safeSetStorage('ramadhanAllRecords', JSON.stringify(allRecords)); }
 
         function getUserStateKey() {
-            if (!currentUser) return null;
-            return `ramadhanState_${SCHOOL_ID}_${currentUser.nama.replace(/\s+/g, '_')}_${currentUser.kelas}`;
+            return currentUser ? `ramadhanState_${SCHOOL_ID}_${currentUser.nama.replace(/\s+/g, '_')}_${currentUser.kelas}` : null;
         }
 
         function loadUserState() {
             const key = getUserStateKey();
             if (!key) return;
-            const savedState = safeGetStorage(key);
-            if (savedState) {
+            const saved = safeGetStorage(key);
+            if (saved) {
                 try {
-                    const state = JSON.parse(savedState);
-                    if (state.shalatData) shalatData = state.shalatData;
-                    if (state.tarawihData) tarawihData = state.tarawihData;
-                    if (state.puasaData) puasaData = state.puasaData;
-                    if (state.tadarusData) tadarusData = state.tadarusData;
-                    if (state.ceramahData) ceramahData = state.ceramahData;
-                } catch (e) { initDefaultData(); }
+                    const s = JSON.parse(saved);
+                    if (s.shalatData) shalatData = s.shalatData;
+                    if (s.tarawihData) tarawihData = s.tarawihData;
+                    if (s.puasaData) puasaData = s.puasaData;
+                    if (s.tadarusData) tadarusData = s.tadarusData;
+                    if (s.ceramahData) ceramahData = s.ceramahData;
+                } catch(e) { initDefaultData(); }
             } else { initDefaultData(); }
         }
 
         function saveUserState() {
             const key = getUserStateKey();
-            if (!key || isAdmin()) return;
-            safeSetStorage(key, JSON.stringify({ shalatData, tarawihData, puasaData, tadarusData, ceramahData }));
+            if (key && !isAdmin()) {
+                safeSetStorage(key, JSON.stringify({ shalatData, tarawihData, puasaData, tadarusData, ceramahData }));
+            }
         }
 
-        function showToast(message, isSuccess = true) {
+        function showToast(msg, isSuccess = true) {
             const toast = document.createElement('div');
             toast.className = `toast fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-[100] ${isSuccess ? 'bg-green-600' : 'bg-red-600'}`;
-            toast.textContent = message;
+            toast.textContent = msg;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
 
-        function showConfirmDialog(message, onConfirm, isDanger = false) {
-            const overlay = document.createElement('div');
-            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-[70] flex items-center justify-center p-4 transition-opacity duration-200';
-            overlay.style.opacity = '0';
-            const modal = document.createElement('div');
-            modal.className = 'bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full transform transition-all duration-200 scale-95';
-            modal.innerHTML = `
-                <div class="text-center">
-                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full ${isDanger ? 'bg-red-100' : 'bg-blue-100'} mb-4">
-                        <svg class="h-6 w-6 ${isDanger ? 'text-red-600' : 'text-blue-600'}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                    </div>
-                    <h3 class="text-lg leading-6 font-bold text-gray-900 mb-2">Konfirmasi</h3>
-                    <p class="text-sm text-gray-500 mb-6">${message}</p>
-                    <div class="flex gap-3 justify-center">
-                        <button class="modal-cancel-btn flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">Batal</button>
-                        <button class="modal-confirm-btn flex-1 px-4 py-2 text-white rounded-lg font-medium shadow-md ${isDanger ? 'bg-red-600' : 'bg-blue-600'}">Ya, Lanjutkan</button>
-                    </div>
-                </div>
-            `;
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-            requestAnimationFrame(() => { overlay.style.opacity = '1'; modal.classList.add('scale-100'); });
-            const close = () => { overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 200); };
-            overlay.querySelector('.modal-cancel-btn').onclick = close;
-            overlay.querySelector('.modal-confirm-btn').onclick = () => { close(); onConfirm(); };
-        }
-
-        function handleLogout() {
-            showConfirmDialog("Apakah Anda yakin ingin keluar?", () => {
-                safeRemoveStorage('ramadhanUser');
-                currentUser = null;
-                showLoginPage();
-                showToast("Berhasil keluar.");
-            });
-        }
-
         function isAdmin() { return currentUser && currentUser.nama === '*'; }
 
+        function parseRecordData(d) {
+            if (!d) return null;
+            if (typeof d === 'object') return d;
+            if (typeof d === 'string' && (d.startsWith('{') || d.startsWith('['))) {
+                try { return JSON.parse(d); } catch(e) { return d; }
+            }
+            return d;
+        }
+
+        function getMergedRecords(records) {
+            const map = new Map();
+            records.forEach(r => {
+                const key = `${r.nama}-${r.kelas}-${r.kategori}-${r.tanggal}`;
+                const incomingData = parseRecordData(r.hadir);
+                
+                if (map.has(key)) {
+                    let existing = map.get(key);
+                    if (r.kategori === 'Shalat Fardu') {
+                        let existingData = parseRecordData(existing.hadir) || {};
+                        if (typeof existingData !== 'object' || existingData === null) existingData = { 'Status': existingData };
+                        if (typeof incomingData === 'object' && incomingData !== null) {
+                            Object.assign(existingData, incomingData);
+                        } else {
+                            existingData['Info'] = incomingData;
+                        }
+                        existing.hadir = JSON.stringify(existingData);
+                    } else {
+                        map.set(key, { ...r });
+                    }
+                } else {
+                    const recordToSet = { ...r };
+                    if (typeof incomingData === 'object' && incomingData !== null) {
+                        recordToSet.hadir = JSON.stringify(incomingData);
+                    }
+                    map.set(key, recordToSet);
+                }
+            });
+            return Array.from(map.values());
+        }
+
+        async function syncUserFromCloud() {
+            if (!currentUser || isAdmin() || !SCHOOL_ID) return;
+            try {
+                const url = new URL(GOOGLE_SCRIPT_URL);
+                url.searchParams.append('action', 'read');
+                url.searchParams.append('ss_id', SCHOOL_ID);
+                url.searchParams.append('nama', currentUser.nama);
+                url.searchParams.append('kelas', currentUser.kelas);
+                
+                const res = await fetch(url);
+                const result = await res.json();
+                
+                if (result.status === 'success' && Array.isArray(result.data)) {
+                    const serverRecords = result.data.map(item => ({
+                        nama: currentUser.nama,
+                        kelas: currentUser.kelas,
+                        kategori: item.kategori,
+                        tanggal: item.tanggal,
+                        hadir: item.detail || item.hadir
+                    }));
+
+                    allRecords = getMergedRecords([...allRecords, ...serverRecords]);
+                    
+                    allRecords.forEach(r => {
+                        if (r.nama === currentUser.nama) {
+                            const tgl = r.tanggal;
+                            const data = parseRecordData(r.hadir);
+                            if (r.kategori === 'Shalat Fardu' && typeof data === 'object' && data !== null) {
+                                shalatData[tgl] = { ...shalatData[tgl], ...data };
+                            } else if (r.kategori === 'Tarawih') {
+                                if (typeof data === 'object' && data !== null) tarawihData[tgl] = { ...tarawihData[tgl], ...data };
+                            } else if (r.kategori === 'Puasa') {
+                                puasaData[tgl] = (typeof data === 'object' && data !== null ? data.status : data);
+                            }
+                        }
+                    });
+                    
+                    saveAllRecords();
+                    saveUserState();
+                    if (document.getElementById('contentArea')) renderContentArea();
+                }
+            } catch (e) { console.error("Sync Error:", e); }
+        }
+
+        function getCategoryIconEmoji(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
+
+        function renderDetailData(k, d) {
+            d = parseRecordData(d);
+            if (!d) return '-';
+            if (k === 'Shalat Fardu') {
+                if (typeof d !== 'object' || d === null) return `<b>${d}</b>`;
+                const ordered = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+                const text = ordered
+                    .filter(key => d[key])
+                    .map(key => `<span class="mr-2"><b>${key}:</b> ${d[key]}</span>`)
+                    .join(' ');
+                return text || '-';
+            }
+            if (k === 'Tarawih') return d.status ? `<b>${d.status}</b> di ${d.tempat || '-'}` : '-';
+            if (k === 'Puasa') return typeof d === 'string' ? `<b>${d}</b>` : `<b>${d.status || '-'}</b>`;
+            if (k === 'Tadarus') return `Surat <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
+            if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b> <br> <span class="text-xs italic">${d.ringkasan || '-'}</span>`;
+            return typeof d === 'object' ? JSON.stringify(d) : d;
+        }
+
+        /**
+         * SISTEM REGISTRASI SEKOLAH (THE MISSING FUNCTION)
+         */
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -208,9 +257,9 @@
                             <p class="text-slate-400 text-sm mt-2">Buat sistem amalan ramadhan khusus sekolah Anda.</p>
                         </div>
                         <form id="regForm" class="space-y-4">
-                            <input type="email" id="regEmail" placeholder="Gmail Guru" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>
-                            <input type="text" id="regSchool" placeholder="Nama Sekolah" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 transition-all" required>
-                            <button type="submit" id="regBtn" class="w-full bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-lg">BUAT SEKARANG</button>
+                            <input type="email" id="regEmail" placeholder="Gmail Guru" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 font-bold transition-all" required>
+                            <input type="text" id="regSchool" placeholder="Nama Sekolah" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 font-bold transition-all" required>
+                            <button type="submit" id="regBtn" class="w-full bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-lg">DAFTAR SEKARANG</button>
                         </form>
                         <div id="regResult" class="mt-8 hidden p-6 bg-slate-900 rounded-3xl text-white">
                             <p class="text-[10px] font-bold text-emerald-400 uppercase mb-2">Link Siswa Anda:</p>
@@ -219,7 +268,7 @@
                                 <button onclick="downloadLink()" class="py-3 bg-blue-600 text-white rounded-xl font-bold pulse-blue shadow-lg text-xs">Unduh Instruksi</button>
                                 <button onclick="copyLink()" class="py-3 bg-emerald-600 text-white rounded-xl font-bold pulse-green shadow-lg text-xs">Salin Link</button>
                             </div>
-                            <button onclick="location.reload()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold shadow-lg">COBA MASUK</button>
+                            <button onclick="location.reload()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold shadow-lg">MASUK APLIKASI</button>
                         </div>
                     </div>
                 </div>`;
@@ -230,7 +279,7 @@
                 const email = document.getElementById('regEmail').value;
                 const school = document.getElementById('regSchool').value;
                 
-                btn.disabled = true; btn.textContent = "Sedang Menyiapkan...";
+                btn.disabled = true; btn.textContent = "Menyiapkan Spreadsheet...";
                 try {
                     const res = await fetch(GOOGLE_SCRIPT_URL, { 
                         method: 'POST', 
@@ -241,12 +290,12 @@
                         document.getElementById('regResult').classList.remove('hidden');
                         sessionStorage.setItem('current_school_id', data.ss_id);
                         document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
-                        btn.textContent = "Sekolah Terdaftar!";
-                        showToast("Pendaftaran Berhasil!");
+                        btn.textContent = "Berhasil!";
+                        showToast("Sekolah Berhasil Didaftarkan!");
                     }
                 } catch (err) { 
                     btn.disabled = false; btn.textContent = "Coba Lagi"; 
-                    showToast("Gagal mendaftar. Periksa koneksi.", false);
+                    showToast("Gagal mendaftar. Hubungi Admin.", false);
                 }
             };
         }
@@ -272,156 +321,86 @@
             showToast("Instruksi diunduh!");
         };
 
+        /**
+         * LOGIN & AMALAN UI
+         */
         function showLoginPage() {
-            const config = window.elementSdk?.config || defaultConfig;
-            const lastNama = safeGetStorage('last_nama') || '';
-            const lastKelas = safeGetStorage('last_kelas') || '';
+            const config = defaultConfig;
             let classOptions = `<option value="">Pilih Kelas</option>`;
             ['7','8','9'].forEach(g => {
                 classOptions += `<optgroup label="Kelas ${g}">`;
                 ['A','B','C','D','E','F','G','H','I','J'].forEach(s => {
-                    const c = `${g}${s}`;
-                    classOptions += `<option value="${c}" ${c === lastKelas ? 'selected' : ''}>${c}</option>`;
+                    classOptions += `<option value="${g}${s}">${g}${s}</option>`;
                 });
                 classOptions += `</optgroup>`;
             });
+
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4" style="background: ${config.background_color};">
-                    <div class="w-full max-w-md rounded-[2rem] shadow-2xl p-8 bg-white">
-                        <h1 class="text-center font-black text-3xl mb-2 text-emerald-700">${config.app_title}</h1>
-                        <p class="text-center text-sm mb-8 text-gray-500">${config.welcome_message}</p>
+                    <div class="w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 bg-white">
+                        <h1 class="text-center font-black text-3xl mb-2 text-emerald-700 leading-tight">Amalan<br>Ramadhan</h1>
+                        <p class="text-center text-sm mb-8 text-gray-400 font-bold uppercase tracking-widest">${config.welcome_message}</p>
                         <form id="loginForm" class="space-y-4">
-                            <div><label class="block mb-1 font-semibold text-gray-700">Nama Lengkap Siswa</label><input type="text" id="nama" value="${lastNama}" class="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"></div>
-                            <div><label class="block mb-1 font-semibold text-gray-700">Kelas</label><select id="kelas" class="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl outline-none focus:ring-2 focus:ring-emerald-500">${classOptions}</select></div>
-                            <button type="submit" class="w-full py-4 rounded-xl text-white font-black bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg active:scale-95 uppercase tracking-wider">Masuk</button>
+                            <input type="text" id="nama" placeholder="Nama Lengkap Siswa" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 font-bold transition-all">
+                            <select id="kelas" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 font-bold transition-all">${classOptions}</select>
+                            <button type="submit" class="w-full py-5 rounded-2xl text-white font-black bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-95 transition-all uppercase tracking-widest">Masuk</button>
                         </form>
                     </div>
-                </div>
-            `;
-            document.getElementById('loginForm').addEventListener('submit', (e) => {
+                </div>`;
+
+            document.getElementById('loginForm').onsubmit = (e) => {
                 e.preventDefault();
                 const nama = document.getElementById('nama').value.trim();
-                const kelas = document.getElementById('kelas').value.trim();
-                const admin = nama === '*';
-                if (!admin && (!nama || !kelas)) return showToast("Mohon isi nama dan kelas", false);
-                if (!admin) { safeSetStorage('last_nama', nama); safeSetStorage('last_kelas', kelas); }
-                currentUser = { nama: nama, kelas: admin ? '*' : kelas, password: admin ? '*' : '' };
+                const kelas = document.getElementById('kelas').value;
+                if (nama === '*') {
+                    currentUser = { nama: '*', kelas: '*', password: '*' };
+                } else if (!nama || !kelas) {
+                    return showToast("Lengkapi Nama dan Kelas!", false);
+                } else {
+                    currentUser = { nama, kelas };
+                }
                 safeSetStorage('ramadhanUser', JSON.stringify(currentUser));
                 loadUserState();
-                if (!admin) syncUserFromCloud();
+                syncUserFromCloud();
                 showAmalanPage();
-            });
-        }
-
-        function parseRecordData(d) { 
-            try { 
-                if (!d) return null; 
-                if (typeof d === 'object') return d;
-                if (typeof d === 'string' && (d.startsWith('{') || d.startsWith('['))) return JSON.parse(d);
-                return d; 
-            } catch (e) { return d; } 
-        }
-
-        async function syncUserFromCloud() {
-            if (!currentUser || isAdmin() || !SCHOOL_ID) return;
-            try {
-                const url = new URL(GOOGLE_SCRIPT_URL);
-                url.searchParams.append('action', 'read');
-                url.searchParams.append('ss_id', SCHOOL_ID);
-                url.searchParams.append('nama', currentUser.nama);
-                url.searchParams.append('kelas', currentUser.kelas);
-                const response = await fetch(url);
-                const result = await response.json();
-                if (result.status === 'success' && Array.isArray(result.data)) {
-                    result.data.forEach(item => {
-                        const tgl = item.tanggal;
-                        const cat = item.kategori;
-                        let detail = item.detail || item.hadir;
-                        
-                        if (typeof detail === 'string' && (detail.startsWith('{') || detail.startsWith('['))) { 
-                            try { detail = JSON.parse(detail); } catch(e) {} 
-                        }
-                        
-                        const record = { nama: currentUser.nama, kelas: currentUser.kelas, kategori: cat, tanggal: tgl, hadir: (typeof detail === 'object' ? JSON.stringify(detail) : detail) };
-                        
-                        processLocalRecord(record);
-
-                        if (cat === 'Shalat Fardu') {
-                            if (typeof detail === 'object' && detail !== null) {
-                                shalatData[tgl] = { ...shalatData[tgl], ...detail };
-                            } else if (typeof detail === 'string') {
-                                shalatData[tgl] = { ...shalatData[tgl], 'Subuh': detail };
-                            }
-                        } else if (cat === 'Tarawih') {
-                            if (typeof detail === 'object' && detail !== null) tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
-                        } else if (cat === 'Puasa') {
-                            puasaData[tgl] = (typeof detail === 'object' ? detail.status : detail);
-                        } else if (cat === 'Tadarus') {
-                            if (typeof detail === 'object' && detail !== null) tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
-                        } else if (cat === 'Ceramah') {
-                            if (typeof detail === 'object' && detail !== null) ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
-                        }
-                    });
-                    saveAllRecords();
-                    saveUserState();
-                    if (document.getElementById('contentArea')) renderContentArea();
-                }
-            } catch (e) {}
-        }
-
-        function processLocalRecord(record) {
-            const existingIdx = allRecords.findIndex(r => r.nama === record.nama && r.kategori === record.kategori && r.tanggal == record.tanggal);
-            
-            if (existingIdx !== -1 && record.kategori === 'Shalat Fardu') {
-                let existingHadir = parseRecordData(allRecords[existingIdx].hadir);
-                let newHadir = parseRecordData(record.hadir);
-                
-                if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
-                    allRecords[existingIdx].hadir = JSON.stringify({ ...existingHadir, ...newHadir });
-                } else {
-                    allRecords[existingIdx].hadir = record.hadir;
-                }
-            } else if (existingIdx !== -1) {
-                allRecords[existingIdx].hadir = record.hadir;
-            } else {
-                allRecords.push(record);
-            }
+            };
         }
 
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
             if (isAdmin()) return (showLaporanPage(), fetchAllDataForAdmin());
-            const config = window.elementSdk?.config || defaultConfig;
+
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-gray-50">
-                    <div class="max-w-4xl mx-auto p-4 md:p-6 pb-24">
-                        <div class="rounded-3xl shadow-xl p-6 mb-6 bg-white border border-emerald-50">
-                            <h1 class="font-black text-2xl mb-4 text-emerald-800">${config.app_title}</h1>
-                            <div class="mb-6 bg-emerald-50 p-5 rounded-2xl text-sm border border-emerald-100 flex flex-col md:flex-row justify-between gap-4">
-                                <div>
-                                    <p class="mb-1 text-emerald-900 font-bold uppercase text-[10px] tracking-widest opacity-60">Siswa Aktif</p>
-                                    <p class="text-emerald-900 font-black text-xl">${currentUser.nama}</p>
-                                    <p class="text-emerald-600 font-bold">Kelas ${currentUser.kelas}</p>
+                    <div class="max-w-4xl mx-auto p-4 md:p-8 pb-24">
+                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 border-b-8 border-emerald-500">
+                            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                                <div class="text-center md:text-left">
+                                    <p class="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-1">PESERTA AKTIF</p>
+                                    <h1 class="font-black text-3xl text-gray-800 leading-none">${currentUser.nama.toUpperCase()}</h1>
+                                    <p class="font-bold text-emerald-600 mt-2">KELAS ${currentUser.kelas}</p>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button id="rekapBtn" class="flex-1 px-5 py-2.5 rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md font-bold text-sm">📊 Rekap Saya</button>
-                                    <button id="logoutBtn" class="px-5 py-2.5 rounded-xl text-white bg-red-500 hover:bg-red-600 shadow-md font-bold text-sm">Keluar</button>
+                                    <button id="rekapBtn" class="px-6 py-3 bg-emerald-100 text-emerald-700 rounded-xl font-black text-xs uppercase tracking-widest">📊 Rekap</button>
+                                    <button id="logoutBtn" class="px-6 py-3 bg-gray-100 text-gray-500 rounded-xl font-black text-xs uppercase tracking-widest">Keluar</button>
                                 </div>
                             </div>
                         </div>
-                        <div class="rounded-2xl shadow-lg mb-6 overflow-hidden sticky top-0 z-40 bg-white border">
+
+                        <div class="rounded-2xl shadow-lg mb-8 sticky top-4 z-40 bg-white border border-gray-100 overflow-hidden">
                             <div class="flex overflow-x-auto no-scrollbar">
-                                ${categories.map(cat => `<button class="tab-button flex-1 px-4 py-4 font-black whitespace-nowrap text-sm ${currentTab === cat ? 'active text-emerald-600 border-b-4 border-emerald-600 bg-emerald-50/50' : 'text-gray-500'}" data-tab="${cat}">${cat}</button>`).join('')}
+                                ${categories.map(cat => `<button class="tab-button flex-1 px-5 py-5 font-black whitespace-nowrap text-xs uppercase tracking-widest ${currentTab === cat ? 'active text-emerald-600 border-b-4 border-emerald-600 bg-emerald-50/50' : 'text-gray-400'}" data-tab="${cat}">${cat}</button>`).join('')}
                             </div>
                         </div>
-                        <div class="rounded-3xl shadow-xl p-6 bg-white min-h-[500px]">
-                            <h2 class="font-black text-xl mb-6 flex items-center gap-2 text-gray-800 border-b pb-4 uppercase tracking-tighter"><span>📝</span> ${currentTab}</h2>
-                            <div id="contentArea"></div>
-                        </div>
+
+                        <div id="contentArea" class="min-h-[500px]"></div>
                     </div>
-                </div>
-            `;
-            document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = (e) => { currentTab = e.target.dataset.tab; showAmalanPage(); });
+                </div>`;
+
+            document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = (e) => { 
+                currentTab = e.target.dataset.tab; 
+                showAmalanPage(); 
+            });
             document.getElementById('rekapBtn').onclick = showRekapPage;
             document.getElementById('logoutBtn').onclick = handleLogout;
             renderContentArea();
@@ -432,91 +411,79 @@
             const days = Array.from({length: 30}, (_, i) => i + 1);
             
             if (currentTab === 'Shalat Fardu') {
-                area.innerHTML = `<div class="space-y-8">${days.map(t => `
-                    <div class="p-6 border rounded-[2rem] bg-white shadow-sm border-l-8 border-emerald-500">
-                        <h3 class="font-black text-emerald-800 mb-6 flex justify-between text-lg">📅 Hari ke-${t} <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mt-1">Wajib</span></h3>
-                        <div class="space-y-6">
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `
+                    <div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl">
+                        <h3 class="font-black text-gray-800 mb-6 flex justify-between items-center text-xl">📅 HARI KE-${t}</h3>
+                        <div class="space-y-8">
                             ${['Subuh','Dzuhur','Ashar','Maghrib','Isya'].map(w => `
-                                <div class="pb-6 border-b border-gray-100 last:border-0">
-                                    <div class="font-black text-gray-500 text-xs uppercase mb-3 tracking-widest">⏰ Shalat ${w}</div>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                                <div class="pb-6 border-b border-gray-50 last:border-0">
+                                    <p class="font-black text-gray-400 text-[11px] uppercase tracking-widest mb-4 flex items-center gap-2">SHALAT ${w}</p>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                         ${['berjamaah','munfarid','haid','tidak shalat'].map(s => `
-                                            <button class="sh-btn px-3 py-3 text-[10px] rounded-xl border-2 transition-all font-bold ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-gray-400 border-transparent hover:border-emerald-200'}" data-t="${t}" data-w="${w}" data-s="${s}">${s.toUpperCase()}</button>
+                                            <button class="sh-btn px-2 py-4 text-[10px] rounded-2xl border-2 font-black transition-all ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]' : 'bg-gray-50 text-gray-400 border-transparent hover:border-emerald-200'}" data-t="${t}" data-w="${w}" data-s="${s}">${s.toUpperCase()}</button>
                                         `).join('')}
                                     </div>
-                                    <button class="sv-wkt-btn w-full py-3 text-xs rounded-xl bg-blue-600 text-white font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all" data-t="${t}" data-w="${w}">💾 SIMPAN ${w.toUpperCase()}</button>
+                                    <button class="sv-wkt-btn w-full py-4 text-xs rounded-2xl bg-blue-600 text-white font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all" data-t="${t}" data-w="${w}">💾 SIMPAN ${w.toUpperCase()}</button>
                                 </div>
                             `).join('')}
                         </div>
                     </div>`).join('')}</div>`;
-                area.querySelectorAll('.sh-btn').forEach(b => b.onclick = (e) => { const d = e.target.dataset; shalatData[d.t][d.w] = d.s; saveUserState(); renderContentArea(); });
+                area.querySelectorAll('.sh-btn').forEach(b => b.onclick = (e) => { 
+                    const d = e.target.dataset; 
+                    shalatData[d.t][d.w] = d.s; 
+                    saveUserState(); 
+                    renderContentArea(); 
+                });
                 area.querySelectorAll('.sv-wkt-btn').forEach(b => b.onclick = (e) => handleSimpanPerWaktu(e.target.dataset.t, e.target.dataset.w));
                 
             } else if (currentTab === 'Tarawih') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border rounded-[2rem] shadow-sm border-l-8 border-indigo-500"><h3 class="font-black text-indigo-900 mb-4">📅 Hari ke-${t}</h3><div class="mb-4"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">STATUS</p><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-2 py-3 text-[9px] border-2 rounded-xl font-black ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div></div><div class="mb-6"><p class="text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">TEMPAT</p><div class="grid grid-cols-2 gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-3 text-[10px] border-2 rounded-xl font-black ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-tmp="${tmp}">${tmp.toUpperCase()}</button>`).join('')}</div></div><button class="sv-harian w-full py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-indigo-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="mb-6"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">STATUS</p><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-1 py-4 text-[9px] border-2 rounded-2xl font-black ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div></div><div class="mb-8"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">LOKASI</p><div class="grid grid-cols-2 gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-4 text-[10px] border-2 rounded-2xl font-black ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-tmp="${tmp}">${tmp.toUpperCase()}</button>`).join('')}</div></div><button class="sv-harian w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.tr-s').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].status = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.tr-t').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].tempat = e.target.dataset.tmp; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
             } else if (currentTab === 'Puasa') {
-                area.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-6 border rounded-[2rem] border-l-8 border-orange-500 shadow-sm"><h3 class="font-black text-orange-900 mb-4">📅 Hari ke-${t}</h3><div class="grid grid-cols-2 gap-2 mb-6">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button class="ps-s px-4 py-3 text-[10px] border-2 rounded-xl font-black ${puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div><button class="sv-harian w-full py-4 bg-orange-500 text-white rounded-xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN PUASA</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-4">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-orange-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="grid grid-cols-2 gap-2 mb-8">${['mengerjakan','tidak mengerjakan','sakit','haid'].map(s => `<button class="ps-s px-4 py-4 text-[10px] border-2 rounded-2xl font-black ${puasaData[t] === s ? 'bg-orange-500 text-white border-orange-500' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div><button class="sv-harian w-full py-5 bg-orange-500 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN PUASA</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.ps-s').forEach(b => b.onclick = (e) => { puasaData[e.target.dataset.t] = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
-            } else if (currentTab === 'Tadarus') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border rounded-[2rem] border-l-8 border-blue-500 shadow-sm"><h3 class="font-black text-blue-900 mb-4">📅 Hari ke-${t}</h3><div class="grid grid-cols-2 gap-2 mb-4">${['sendiri','ustadz'].map(m => `<button class="td-m px-4 py-3 text-[10px] border-2 rounded-xl font-black ${tadarusData[t]?.pilihan === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-m="${m}">${m === 'sendiri' ? 'SENDIRI' : 'DENGAN USTADZ'}</button>`).join('')}</div><div class="grid grid-cols-2 gap-4 mb-6"><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">NAMA SURAT</label><input type="text" class="td-s w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="Contoh: Al-Baqarah" data-t="${t}" value="${tadarusData[t]?.surat || ''}"></div><div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">AYAT</label><input type="text" class="td-a w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-blue-500" placeholder="1-20" data-t="${t}" value="${tadarusData[t]?.ayat || ''}"></div></div><button class="sv-harian w-full py-4 bg-blue-600 text-white rounded-xl font-black shadow-lg uppercase text-xs" data-t="${t}">💾 SIMPAN TADARUS</button></div>`).join('')}</div>`;
-                area.querySelectorAll('.td-m').forEach(b => b.onclick = (e) => { tadarusData[e.target.dataset.t].pilihan = e.target.dataset.m; saveUserState(); renderContentArea(); });
-                area.querySelectorAll('.td-s').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].surat = i.value; saveUserState(); });
-                area.querySelectorAll('.td-a').forEach(i => i.oninput = (e) => { tadarusData[e.target.dataset.t].ayat = i.value; saveUserState(); });
-                area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
-            } else if (currentTab === 'Ceramah') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-6 border rounded-[2rem] border-l-8 border-rose-500 shadow-sm"><h3 class="font-black text-rose-900 mb-4">📅 Hari ke-${t}</h3><div class="space-y-4"><input type="text" class="cr-p w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Nama Penceramah" data-t="${t}" value="${ceramahData[t]?.penceramah || ''}"><input type="text" class="cr-t w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Tempat / Media" data-t="${t}" value="${ceramahData[t]?.tempat || ''}"><textarea class="cr-r w-full p-4 bg-gray-50 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-rose-500" placeholder="Ringkasan isi ceramah..." data-t="${t}" rows="3">${ceramahData[t]?.ringkasan || ''}</textarea></div><button class="sv-harian w-full mt-6 py-4 bg-rose-600 text-white rounded-xl font-black shadow-lg uppercase text-xs" data-t="${t}">💾 SIMPAN CERAMAH</button></div>`).join('')}</div>`;
-                area.querySelectorAll('.cr-p').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].penceramah = i.value; saveUserState(); });
-                area.querySelectorAll('.cr-t').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].tempat = i.value; saveUserState(); });
-                area.querySelectorAll('.cr-r').forEach(i => i.oninput = (e) => { ceramahData[e.target.dataset.t].ringkasan = i.value; saveUserState(); });
-                area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
+            } else {
+                area.innerHTML = `<div class="p-10 text-center bg-white rounded-[2.5rem] shadow-xl"><p class="text-gray-400 font-bold uppercase tracking-widest text-sm italic">Fitur ${currentTab} segera hadir...</p></div>`;
             }
         }
 
         async function handleSimpanPerWaktu(tgl, wkt) {
-            if (!SCHOOL_ID) return showToast("ID Sekolah hilang. Harap buka melalui link yang benar.", false);
+            if (!SCHOOL_ID) return showToast("Gunakan Link dari Guru!", false);
             const status = shalatData[tgl]?.[wkt];
             if (!status) return showToast(`Pilih status shalat ${wkt}!`, false);
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
-            const detailObj = shalatData[tgl];
+            const singlePrayerData = {};
+            singlePrayerData[wkt] = status;
+
             const record = { 
                 ss_id: SCHOOL_ID, 
                 nama: currentUser.nama, 
                 kelas: currentUser.kelas, 
                 kategori: 'Shalat Fardu', 
                 tanggal: tgl, 
-                hadir: JSON.stringify(detailObj),
-                sheet: 'Shalat Fardu',
-                shalat_detail: detailObj
+                hadir: JSON.stringify(singlePrayerData),
+                sheet: 'Shalat Fardu'
             };
 
             processLocalRecord(record);
             saveAllRecords();
             
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    mode: 'no-cors',
-                    body: JSON.stringify(record) 
-                });
-                showToast(`${wkt} hari ke-${tgl} disimpan!`);
-            } catch (e) { showToast("Gagal menyimpan ke awan.", false); }
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(record) });
+                showToast(`${wkt} Berhasil Disimpan!`);
+            } catch (e) { showToast("Error Cloud. Coba lagi.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${wkt.toUpperCase()}`; }
         }
 
         async function handleSimpanHarian(tgl) {
-            if (!SCHOOL_ID) return showToast("ID Sekolah hilang.", false);
-            let detailObj = null;
-            if (currentTab === 'Tarawih') detailObj = tarawihData[tgl];
-            else if (currentTab === 'Puasa') detailObj = { status: puasaData[tgl] };
-            else if (currentTab === 'Tadarus') detailObj = tadarusData[tgl];
-            else if (currentTab === 'Ceramah') detailObj = ceramahData[tgl];
-
+            let detailObj = (currentTab === 'Tarawih') ? tarawihData[tgl] : { status: puasaData[tgl] };
+            if (!detailObj || (currentTab === 'Tarawih' && !detailObj.status) || (currentTab === 'Puasa' && !puasaData[tgl])) return showToast("Data belum lengkap!", false);
+            
             const btn = document.querySelector(`.sv-harian[data-t="${tgl}"]`);
             btn.disabled = true; btn.textContent = 'SEDANG MENGIRIM...';
 
@@ -527,64 +494,17 @@
                 kategori: currentTab, 
                 tanggal: tgl, 
                 hadir: JSON.stringify(detailObj),
-                sheet: currentTab,
-                tarawih_detail: currentTab === 'Tarawih' ? detailObj : undefined,
-                puasa_detail: currentTab === 'Puasa' ? detailObj : undefined,
-                tadarus_detail: currentTab === 'Tadarus' ? detailObj : undefined,
-                ceramah_detail: currentTab === 'Ceramah' ? detailObj : undefined
+                sheet: currentTab
             };
 
             processLocalRecord(record);
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    mode: 'no-cors',
-                    body: JSON.stringify(record) 
-                });
-                showToast(`Data hari ke-${tgl} berhasil disimpan!`);
-            } catch (e) { showToast("Gagal terhubung ke Cloud.", false); }
+                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(record) });
+                showToast(`Data Berhasil Disimpan!`);
+            } catch (e) { showToast("Gagal terhubung.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${currentTab.toUpperCase()}`; }
-        }
-
-        function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return 'Mosque'; case 'Tarawih': return 'Moon'; case 'Puasa': return 'Food'; case 'Tadarus': return 'Book'; case 'Ceramah': return 'Mic'; default: return 'Note'; } }
-        function getCategoryIconEmoji(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-        
-        function renderDetailData(k, d) {
-            d = parseRecordData(d);
-            if (!d) return '-'; 
-            if (k === 'Shalat Fardu') {
-                if (typeof d !== 'object' || d === null) return `<span class="font-bold text-emerald-600">${d}</span>`;
-                const orderedKeys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                const entries = orderedKeys.filter(key => d[key]).map(key => `<span class="inline-block bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-[10px] mb-1"><b>${key}:</b> ${d[key]}</span>`);
-                return entries.length ? entries.join(' ') : '-';
-            } else if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${typeof d === 'string' ? d : (d.status || '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (${d.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${d.penceramah || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b><br><span class="text-xs text-slate-500 italic">"${d.ringkasan || '-'}"</span>`;
-            return typeof d === 'object' ? JSON.stringify(d) : d;
-        }
-
-        function getMergedRecords(records) {
-            const map = new Map();
-            records.forEach(r => {
-                const key = `${r.nama}-${r.kelas}-${r.kategori}-${r.tanggal}`;
-                if (map.has(key) && r.kategori === 'Shalat Fardu') {
-                    let existing = map.get(key);
-                    let existingHadir = parseRecordData(existing.hadir);
-                    let newHadir = parseRecordData(r.hadir);
-                    
-                    if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
-                        existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
-                    } else {
-                        map.set(key, { ...r });
-                    }
-                } else {
-                    map.set(key, { ...r });
-                }
-            });
-            return Array.from(map.values());
         }
 
         function showRekapPage() {
@@ -594,34 +514,34 @@
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8">
                     <div class="max-w-4xl mx-auto">
-                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div class="bg-white p-10 rounded-[3rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
                             <div>
-                                <h1 class="font-black text-3xl text-emerald-800 tracking-tighter">📊 Rekap Amalan Saya</h1>
-                                <p class="text-gray-400 font-bold">Ringkasan aktivitas yang berhasil tercatat.</p>
+                                <h1 class="font-black text-4xl text-emerald-800 tracking-tighter">📊 Rekap Saya</h1>
+                                <p class="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Aktivitas tercatat hari ini</p>
                             </div>
-                            <button id="backBtn" class="px-8 py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg active:scale-95 uppercase text-sm tracking-widest">← Kembali</button>
+                            <button id="backBtn" class="px-10 py-5 bg-emerald-600 text-white font-black rounded-2xl shadow-xl active:scale-95 uppercase text-xs tracking-widest transition-all">← Kembali</button>
                         </div>
                         <div class="space-y-6">
                             ${categories.map(cat => {
                                 const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
                                 return `
-                                    <div class="bg-white rounded-[2rem] shadow-md border overflow-hidden">
-                                        <div class="p-5 bg-emerald-50 border-b flex justify-between items-center">
-                                            <span class="font-black text-emerald-800 uppercase text-xs tracking-widest">${getCategoryIconEmoji(cat)} ${cat}</span>
-                                            <span class="bg-white px-3 py-1 rounded-full text-[10px] font-black text-emerald-600 border border-emerald-100">${items.length} HARI</span>
+                                    <div class="bg-white rounded-[2.5rem] shadow-xl border-t-8 border-emerald-500 overflow-hidden">
+                                        <div class="p-6 bg-emerald-50/50 flex justify-between items-center border-b">
+                                            <span class="font-black text-emerald-800 uppercase text-xs tracking-[0.2em]">${cat}</span>
+                                            <span class="bg-white px-4 py-1 rounded-full text-[10px] font-black text-emerald-600 shadow-sm">${items.length} HARI</span>
                                         </div>
-                                        <div class="divide-y">
+                                        <div class="divide-y divide-gray-50">
                                             ${items.length ? items.map(r => `
-                                                <div class="p-5 flex gap-4 text-sm items-start hover:bg-gray-50 transition-colors">
-                                                    <div class="flex flex-col items-center justify-center min-w-[50px] bg-slate-50 p-2 rounded-xl border border-slate-100">
-                                                        <span class="text-[9px] font-bold text-slate-400 uppercase">Hari</span>
-                                                        <span class="font-black text-emerald-700 text-lg">${r.tanggal}</span>
+                                                <div class="p-6 flex gap-6 items-start hover:bg-emerald-50/20 transition-colors">
+                                                    <div class="flex flex-col items-center justify-center min-w-[60px] bg-white p-3 rounded-2xl border-2 border-emerald-100 shadow-sm">
+                                                        <span class="text-[8px] font-black text-emerald-300 uppercase leading-none">HARI</span>
+                                                        <span class="font-black text-emerald-700 text-2xl leading-none mt-1">${r.tanggal}</span>
                                                     </div>
-                                                    <div class="flex-1 text-slate-700 leading-relaxed pt-1">
+                                                    <div class="flex-1 text-gray-700 leading-relaxed text-sm pt-1">
                                                         ${renderDetailData(cat, r.hadir)}
                                                     </div>
                                                 </div>
-                                            `).join('') : '<p class="p-10 text-center text-gray-400 font-bold italic">Belum ada data untuk kategori ini.</p>'}
+                                            `).join('') : '<p class="p-16 text-center text-gray-400 font-bold italic uppercase text-xs tracking-widest">Belum ada data</p>'}
                                         </div>
                                     </div>
                                 `;
@@ -634,194 +554,97 @@
 
         async function fetchAllDataForAdmin() {
             if (!SCHOOL_ID) return;
-            const loadingToast = showToast("Sinkronisasi Database Guru...", true);
+            showToast("Sinkronisasi Database...", true);
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('action', 'readAll');
                 url.searchParams.append('ss_id', SCHOOL_ID);
-                
-                const res = await fetch(url, { redirect: 'follow' });
+                const res = await fetch(url);
                 const result = await res.json();
-                
                 if (result.status === 'success') {
-                    const rawData = result.data;
-                    const mergedDataMap = new Map();
-                    
-                    rawData.forEach(item => {
-                        const key = `${item.nama}-${item.kelas}-${item.kategori}-${item.tanggal}`;
-                        let hadir = item.detail || item.hadir;
-                        
-                        if (typeof hadir === 'string' && hadir.startsWith('{')) {
-                            try { hadir = JSON.parse(hadir); } catch(e) {}
-                        }
-                        
-                        if (mergedDataMap.has(key) && item.kategori === 'Shalat Fardu') {
-                            let existing = mergedDataMap.get(key);
-                            let existingHadir = parseRecordData(existing.hadir);
-                            let newHadir = parseRecordData(hadir);
-                            
-                            if (typeof existingHadir === 'object' && existingHadir !== null && typeof newHadir === 'object' && newHadir !== null) {
-                                existing.hadir = JSON.stringify({ ...existingHadir, ...newHadir });
-                            } else {
-                                mergedDataMap.set(key, { ...item, hadir: (typeof hadir === 'object' ? JSON.stringify(hadir) : hadir) });
-                            }
-                        } else {
-                            mergedDataMap.set(key, { ...item, hadir: (typeof hadir === 'object' ? JSON.stringify(hadir) : hadir) });
-                        }
-                    });
-
-                    allRecords = Array.from(mergedDataMap.values()).map(r => ({
-                        nama: r.nama,
-                        kelas: r.kelas,
-                        kategori: r.kategori,
-                        tanggal: r.tanggal,
-                        hadir: r.hadir
+                    const prepared = (result.data || []).map(item => ({
+                        nama: item.nama,
+                        kelas: item.kelas,
+                        kategori: item.kategori,
+                        tanggal: item.tanggal,
+                        hadir: item.detail || item.hadir
                     }));
-                    
+                    allRecords = getMergedRecords(prepared);
                     saveAllRecords();
                     showLaporanPage();
-                    showToast("Database Sinkron!");
-                } else {
-                    showToast("Gagal sinkronisasi data.", false);
                 }
-            } catch (e) { 
-                showToast("Gagal memuat data guru. Periksa ID Sekolah.", false); 
-            }
+            } catch (e) { showToast("Gagal Sinkron.", false); }
         }
 
         function showLaporanPage() {
-            const allMerged = getMergedRecords(allRecords);
-            const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
-            
+            const allS = [...new Set(allRecords.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
             document.getElementById('app').innerHTML = `
-                <div class="w-full h-full overflow-auto bg-slate-100 p-4 md:p-6">
+                <div class="w-full h-full overflow-auto bg-slate-100 p-6">
                     <div class="max-w-6xl mx-auto">
-                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 class="font-black text-2xl text-slate-800 tracking-tighter flex items-center gap-2">📋 PANEL GURU <span class="text-[10px] bg-slate-100 px-3 py-1 rounded-full text-slate-400 font-bold uppercase tracking-widest">${SCHOOL_ID.substring(0,6)}...</span></h1>
+                        <div class="bg-white p-10 rounded-[3rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6 border-b-8 border-blue-600">
+                            <h1 class="font-black text-3xl text-slate-800 tracking-tighter">📋 PANEL GURU</h1>
                             <div class="flex gap-2">
-                                <button id="syncBtn" class="px-5 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider">🔄 Refresh</button>
-                                <button id="cetakBtn" class="px-5 py-3 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wider">🖨️ Cetak Rekap</button>
-                                <button id="logoutBtn" class="px-5 py-3 bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-wider">Keluar</button>
+                                <button id="syncBtn" class="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">🔄 Sinkron</button>
+                                <button id="logoutBtn" class="px-8 py-4 bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest">Keluar</button>
                             </div>
                         </div>
-
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            ${allS.length ? allS.map(s => {
-                                const sRecords = allMerged.filter(r => r.nama === s.nama && r.kelas === s.kelas);
-                                const uniqueDays = [...new Set(sRecords.map(r => r.tanggal))].length;
+                            ${allS.map(s => {
+                                const sRecs = allRecords.filter(r => r.nama === s.nama);
+                                const uniqueDays = [...new Set(sRecs.map(r => r.tanggal))].length;
                                 return `
-                                    <div class="bg-white p-6 rounded-[2rem] border-2 border-transparent hover:border-emerald-500 hover:bg-white transition-all cursor-pointer group student-card relative overflow-hidden" data-n="${s.nama}" data-k="${s.kelas}">
-                                        <div class="absolute top-0 right-0 p-3">
-                                            <span class="bg-emerald-50 text-emerald-600 text-[9px] font-black px-2 py-1 rounded-lg border border-emerald-100 uppercase tracking-widest">${uniqueDays} HARI AKTIF</span>
-                                        </div>
-                                        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-lg group-hover:text-emerald-700 mt-2">${s.nama}</h3>
-                                        <p class="font-bold text-emerald-600 text-xs">KELAS ${s.kelas}</p>
-                                        <div class="mt-4 flex items-center justify-between border-t pt-4 border-slate-50">
-                                            <div class="flex gap-1">
-                                                ${categories.slice(0,3).map(c => `<span class="w-2 h-2 rounded-full ${sRecords.some(r => r.kategori === c) ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('')}
+                                    <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-transparent hover:border-blue-500 transition-all cursor-pointer student-card" data-n="${s.nama}" data-k="${s.kelas}">
+                                        <div class="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 class="font-black text-slate-800 text-xl leading-tight uppercase">${s.nama}</h3>
+                                                <p class="font-bold text-blue-600 text-[10px] mt-1 tracking-widest">KELAS ${s.kelas}</p>
                                             </div>
-                                            <span class="text-emerald-500 font-black">Detail →</span>
+                                            <span class="bg-blue-50 text-blue-600 text-[9px] font-black px-3 py-1 rounded-full border border-blue-100">${uniqueDays} HARI AKTIF</span>
                                         </div>
-                                    </div>
-                                `;
-                            }).join('') : '<div class="col-span-full py-20 text-center bg-white rounded-[2rem] text-slate-400 font-bold border-2 border-dashed border-slate-200">Belum ada data siswa yang masuk ke database sekolah ini.</div>'}
+                                        <div class="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between text-slate-400">
+                                            <span class="text-[10px] font-bold uppercase italic">Lihat Rincian</span>
+                                            <span class="text-blue-500 font-black">→</span>
+                                        </div>
+                                    </div>`;
+                            }).join('')}
                         </div>
                     </div>
                 </div>`;
-            
             document.querySelectorAll('.student-card').forEach(c => c.onclick = (e) => {
                 const d = e.currentTarget.dataset;
                 showStudentDetail({ nama: d.n, kelas: d.k });
             });
             document.getElementById('syncBtn').onclick = fetchAllDataForAdmin;
-            document.getElementById('cetakBtn').onclick = () => showConfirmDialog("Cetak rekapitulasi seluruh siswa?", handleCetakLaporanGlobal);
             document.getElementById('logoutBtn').onclick = handleLogout;
         }
 
-        function handleCetakLaporanGlobal() {
-            const allMerged = getMergedRecords(allRecords);
-            const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
-            
-            if (!allS.length) return showToast("Tidak ada data untuk dicetak", false);
-
-            const win = window.open('', '_blank');
-            let html = `<html><head><title>Rekap Amalan Ramadhan</title><style>
-                body { font-family: sans-serif; padding: 40px; color: #333; }
-                h1 { text-align: center; border-bottom: 3px solid #333; padding-bottom: 10px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                th { background: #f8f9fa; font-weight: bold; text-transform: uppercase; font-size: 11px; }
-                .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; color: white; }
-                .bg-green { background: #10b981; } .bg-gray { background: #94a3b8; }
-                @media print { .no-print { display: none; } }
-            </style></head><body>
-                <h1>REKAPITULASI AMALAN RAMADHAN 1447H</h1>
-                <p>ID Sekolah: ${SCHOOL_ID}</p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th width="40">No</th>
-                            <th>Nama Siswa</th>
-                            <th>Kelas</th>
-                            <th>Total Hari</th>
-                            <th>Status Pengisian</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${allS.map((s, i) => {
-                            const days = [...new Set(allMerged.filter(r => r.nama === s.nama).map(r => r.tanggal))].length;
-                            return `
-                                <tr>
-                                    <td>${i+1}</td>
-                                    <td><b>${s.nama.toUpperCase()}</b></td>
-                                    <td>${s.kelas}</td>
-                                    <td>${days} Hari</td>
-                                    <td><span class="badge ${days > 0 ? 'bg-green' : 'bg-gray'}">${days > 0 ? 'AKTIF' : 'BELUM ISI'}</span></td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-                <div style="margin-top: 40px; text-align: right;">
-                    <p>Sumedang, ${new Date().toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}</p>
-                    <br><br><br>
-                    <p><b>Guru PAI</b></p>
-                </div>
-                <script>window.onload = () => { window.print(); window.close(); };<\/script>
-            </body></html>`;
-            win.document.write(html);
-            win.document.close();
-        }
-
         function showStudentDetail(s) {
-            const dataRaw = allRecords.filter(r => r.nama === s.nama && r.kelas === s.kelas);
-            const data = getMergedRecords(dataRaw);
-
+            const my = getMergedRecords(allRecords.filter(r => r.nama === s.nama));
             document.getElementById('app').innerHTML = `
-                <div class="w-full h-full overflow-auto bg-slate-50 p-6">
+                <div class="w-full h-full overflow-auto bg-gray-50 p-6">
                     <div class="max-w-4xl mx-auto">
-                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4 border-l-[12px] border-emerald-500">
+                        <div class="bg-white p-10 rounded-[3rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6 border-l-[15px] border-emerald-500">
                             <div>
-                                <h2 class="font-black text-3xl text-slate-800 tracking-tighter">${s.nama}</h2>
-                                <p class="font-bold text-emerald-600 uppercase text-xs tracking-widest">Detail Amalan Ramadhan • Kelas ${s.kelas}</p>
+                                <h2 class="font-black text-4xl text-slate-800 tracking-tighter leading-none">${s.nama.toUpperCase()}</h2>
+                                <p class="font-bold text-emerald-600 uppercase text-[10px] tracking-widest mt-4">AMALAN RAMADHAN • KELAS ${s.kelas}</p>
                             </div>
-                            <button id="backAdmin" class="px-6 py-3 bg-slate-800 text-white rounded-xl font-black text-xs uppercase shadow-md active:scale-95">← Kembali ke Panel</button>
+                            <button id="backAdmin" class="px-8 py-4 bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">← KEMBALI</button>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             ${categories.map(cat => {
-                                const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                                const recs = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
                                 return `
-                                    <div class="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col">
-                                        <h3 class="font-black border-b pb-3 mb-4 text-slate-700 flex items-center gap-2 uppercase text-[11px] tracking-widest">
+                                    <div class="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100">
+                                        <h3 class="font-black border-b pb-4 mb-6 text-slate-700 flex items-center gap-2 uppercase text-[11px] tracking-[0.2em]">
                                             ${getCategoryIconEmoji(cat)} ${cat}
                                         </h3>
-                                        <div class="space-y-3 max-h-[400px] overflow-auto no-scrollbar pr-1">
-                                            ${recs.length ? recs.map(r => `
-                                                <div class="text-xs p-4 bg-slate-50 rounded-2xl border border-slate-100 leading-relaxed hover:bg-emerald-50 transition-colors">
-                                                    <div class="font-black text-emerald-700 mb-2 uppercase tracking-tighter">HARI KE-${r.tanggal}</div>
-                                                    <div class="text-slate-600">${renderDetailData(cat, r.hadir)}</div>
+                                        <div class="space-y-4 max-h-[500px] overflow-auto no-scrollbar">
+                                            ${recs.map(r => `
+                                                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100 leading-relaxed hover:bg-emerald-50 transition-all">
+                                                    <div class="font-black text-emerald-700 mb-2 text-[10px] uppercase tracking-widest">HARI KE-${r.tanggal}</div>
+                                                    <div class="text-slate-600 text-sm">${renderDetailData(cat, r.hadir)}</div>
                                                 </div>
-                                            `).join('') : '<div class="py-10 text-center"><p class="text-[10px] text-gray-400 font-black italic uppercase tracking-widest">Belum ada catatan</p></div>'}
+                                            `).join('') || '<p class="text-[10px] text-gray-400 font-bold italic py-4">BELUM ADA DATA</p>'}
                                         </div>
                                     </div>`;
                             }).join('')}
@@ -831,13 +654,14 @@
             document.getElementById('backAdmin').onclick = showLaporanPage;
         }
 
-        /**
-         * INITIALIZATION
-         */
-        async function init() { 
+        function handleLogout() {
+            safeRemoveStorage('ramadhanUser');
+            location.reload();
+        }
+
+        function init() { 
             loadAllRecords(); 
             const saved = safeGetStorage('ramadhanUser'); 
-            
             if (!SCHOOL_ID) {
                 renderRegistration();
             } else {
@@ -846,12 +670,11 @@
                         currentUser = JSON.parse(saved); 
                         loadUserState(); 
                         showAmalanPage(); 
-                        if (!isAdmin()) setTimeout(syncUserFromCloud, 500); 
-                    } catch (e) { showLoginPage(); } 
-                } else { showLoginPage(); }
+                        syncUserFromCloud(); 
+                    } catch(e) { showLoginPage(); } 
+                } else showLoginPage();
             }
         }
-
         init();
     </script>
  </body>
