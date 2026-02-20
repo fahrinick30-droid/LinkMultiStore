@@ -50,7 +50,6 @@
   <div id="app" class="w-full h-full overflow-auto"></div>
   <script>
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
-        const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
         function getSchoolId() {
             const params = new URLSearchParams(window.location.search);
@@ -78,7 +77,6 @@
         let currentUser = null;
         let currentTab = 'Shalat Fardu';
         let allRecords = [];
-        let hasInfoFiles = false; 
         const categories = ['Shalat Fardu', 'Tarawih', 'Puasa', 'Tadarus', 'Ceramah'];
 
         let shalatData = {};
@@ -229,11 +227,11 @@
                         let detail = item.detail;
                         if (typeof detail === 'string') try { detail = JSON.parse(detail); } catch(e) {}
                         
-                        if (cat === 'Shalat Fardu') shalatData[tgl] = detail;
-                        else if (cat === 'Tarawih') tarawihData[tgl] = detail;
+                        if (cat === 'Shalat Fardu') shalatData[tgl] = { ...shalatData[tgl], ...detail };
+                        else if (cat === 'Tarawih') tarawihData[tgl] = { ...tarawihData[tgl], ...detail };
                         else if (cat === 'Puasa') puasaData[tgl] = detail.status || detail;
-                        else if (cat === 'Tadarus') tadarusData[tgl] = detail;
-                        else if (cat === 'Ceramah') ceramahData[tgl] = detail;
+                        else if (cat === 'Tadarus') tadarusData[tgl] = { ...tadarusData[tgl], ...detail };
+                        else if (cat === 'Ceramah') ceramahData[tgl] = { ...ceramahData[tgl], ...detail };
                     });
                     saveUserState();
                     if (document.getElementById('contentArea')) renderContentArea();
@@ -244,8 +242,8 @@
         async function fetchAllDataForAdmin() {
             if (!SCHOOL_ID) return showToast("Error: ID Sekolah tidak ditemukan.", false);
             const loadingToast = document.createElement('div');
-            loadingToast.className = `fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600`;
-            loadingToast.innerHTML = `Sinkronisasi database...`;
+            loadingToast.className = `fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white z-50 bg-indigo-600 font-bold`;
+            loadingToast.innerHTML = `🔄 Sedang Sinkronisasi...`;
             document.body.appendChild(loadingToast);
             try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
@@ -254,13 +252,13 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success' && Array.isArray(result.data)) {
-                    // LOGIKA PERBAIKAN: Gunakan properti 'detail' dari script Apps Script Anda
+                    // MAPPING DATA: Memastikan trim pada nama dan kelas untuk kecocokan filter
                     allRecords = result.data.map(item => ({
-                        nama: item.nama, 
-                        kelas: item.kelas, 
+                        nama: String(item.nama).trim(), 
+                        kelas: String(item.kelas).trim(), 
                         kategori: item.kategori, 
                         tanggal: item.tanggal, 
-                        hadir: item.detail // Backend script Anda mengirim properti 'detail'
+                        hadir: item.detail // Sesuai properti 'detail' di script Apps Script
                     }));
                     saveAllRecords();
                     if (isAdmin()) showLaporanPage();
@@ -390,7 +388,6 @@
             allRecords.push(record); saveAllRecords();
 
             try {
-                // KIRIM DATA SESUAI STRUKTUR SCRIPT BACKEND ANDA
                 await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ 
                     ss_id: SCHOOL_ID, ...record, 
                     shalat_detail: shalatData[tgl], 
@@ -405,26 +402,30 @@
 
         function getMergedRecords(records) {
             const map = new Map();
-            records.forEach(r => map.set(`${r.nama}-${r.kelas}-${r.kategori}-${r.tanggal}`, r));
+            records.forEach(r => map.set(`${String(r.nama).trim()}-${String(r.kelas).trim()}-${r.kategori}-${r.tanggal}`, r));
             return Array.from(map.values());
         }
 
         function showRekapPage() {
-            const my = getMergedRecords(allRecords.filter(r => r.nama === currentUser.nama && r.kelas === currentUser.kelas));
-            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Saya</h1></div><button onclick="showAmalanPage()" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300">HARI ${r.tanggal}</span><div class="flex-1">${renderDetailData(cat, r.hadir)}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
+            const my = getMergedRecords(allRecords.filter(r => String(r.nama).trim() === String(currentUser.nama).trim() && String(r.kelas).trim() === String(currentUser.kelas).trim()));
+            document.getElementById('app').innerHTML = `<div class="w-full h-full overflow-auto bg-gray-50 p-4 md:p-8"><div class="max-w-4xl mx-auto"><div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center"><div><h1 class="font-black text-3xl text-emerald-800">📊 Rekap Saya</h1></div><button onclick="showAmalanPage()" class="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button></div><div class="space-y-8">${categories.map(cat => { const items = my.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal)); return `<div class="bg-white rounded-2xl shadow-md overflow-hidden border"><div class="p-4 bg-emerald-50 border-b flex justify-between items-center"><span class="font-black text-emerald-800">${cat}</span><span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-emerald-600">${items.length} HARI</span></div><div class="divide-y">${items.length ? items.map(r => `<div class="p-4 flex gap-4 text-sm"><span class="font-black text-gray-300">HARI ${r.tanggal}</span><div class="flex-1">${renderDetailData(cat, r.hadir)}</div></div>`).join('') : '<p class="p-8 text-center text-gray-400 italic">Belum ada data.</p>'}</div></div>`; }).join('')}</div></div></div>`;
         }
 
         function showLaporanPage() {
             const allMerged = getMergedRecords(allRecords);
-            const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
+            // Group students by trimmed name/class to ensure uniqueness
+            const allSMap = new Map();
+            allMerged.forEach(r => allSMap.set(`${String(r.nama).trim()}-${String(r.kelas).trim()}`, {nama: String(r.nama).trim(), kelas: String(r.kelas).trim()}));
+            const allS = Array.from(allSMap.values()).sort((a,b) => a.nama.localeCompare(b.nama));
+
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-100 p-4 md:p-6">
                     <div class="max-w-6xl mx-auto">
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center">
                             <h1 class="font-black text-2xl text-slate-800">📋 PANEL GURU</h1>
                             <div class="flex gap-2">
-                                <button onclick="fetchAllDataForAdmin()" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">🔄 REFRESH</button>
-                                <button onclick="handleLogout()" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">KELUAR</button>
+                                <button onclick="fetchAllDataForAdmin()" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-md">🔄 REFRESH</button>
+                                <button onclick="handleLogout()" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold shadow-md">KELUAR</button>
                             </div>
                         </div>
                         <div id="studentListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -440,18 +441,18 @@
         }
 
         function showStudentDetail(s) {
-            const data = getMergedRecords(allRecords.filter(r => r.nama === s.nama && r.kelas === s.kelas));
+            const data = getMergedRecords(allRecords.filter(r => String(r.nama).trim() === s.nama && String(r.kelas).trim() === s.kelas));
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-50 p-6">
                     <div class="max-w-4xl mx-auto">
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex justify-between items-center">
                             <div><h2 class="font-black text-2xl">${s.nama}</h2><p class="text-emerald-600 font-bold">Kelas: ${s.kelas}</p></div>
-                            <button onclick="showLaporanPage()" class="px-5 py-2 bg-slate-800 text-white rounded-xl font-bold">← KEMBALI</button>
+                            <button onclick="showLaporanPage()" class="px-5 py-2 bg-slate-800 text-white rounded-xl font-bold shadow-md">← KEMBALI</button>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             ${categories.map(cat => {
                                 const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
-                                return `<div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-black border-b pb-2 mb-4 text-slate-700">${cat}</h3><div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, r.hadir)}</div>`).join('') : '<p class="text-xs text-gray-400">Belum ada data.</p>'}</div></div>`;
+                                return `<div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-black border-b pb-2 mb-4 text-slate-700">${cat}</h3><div class="space-y-2">${recs.length ? recs.map(r => `<div class="text-xs p-3 bg-slate-50 rounded-lg border border-slate-100"><strong>Hari ke-${r.tanggal}:</strong><br>${renderDetailData(cat, r.hadir)}</div>`).join('') : '<p class="text-xs text-gray-400 italic">Belum ada data.</p>'}</div></div>`;
                             }).join('')}
                         </div>
                     </div>
@@ -460,20 +461,34 @@
 
         function parseRecordData(d) { 
             if (typeof d === 'object' && d !== null) return d;
+            if (!d) return null;
             try { return JSON.parse(d); } catch (e) { return d; } 
         }
         
         function renderDetailData(k, d) {
             const data = parseRecordData(d);
             if (!data) return '-'; 
+            
+            // LOGIKA RENDERING YANG DIPERKUAT
             if (k === 'Shalat Fardu') {
+                // Jika data adalah string tunggal (misal 'berjamaah'), tampilkan langsung
+                if (typeof data === 'string' && data !== '{"' && !data.includes(':')) return data;
+                
                 const keys = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                return keys.map(key => `${key}: <span class="font-bold text-emerald-600">${data[key] || '-'}</span>`).join(' | ');
-            } else if (k === 'Tarawih') return `Status: <b>${data.status || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b>`;
-            else if (k === 'Puasa') return `Status: <b>${data.status || (typeof data === 'string' ? data : '-')}</b>`;
-            else if (k === 'Tadarus') return `Metode: <b>${data.pilihan || '-'}</b>, Surat: <b>${data.surat || '-'}</b> (${data.ayat || '-'})`;
-            else if (k === 'Ceramah') return `Penceramah: <b>${data.penceramah || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b><br><span class="text-xs italic">"${data.ringkasan || '-'}"</span>`;
-            return JSON.stringify(data);
+                return keys.map(key => {
+                    const val = (typeof data === 'object' && data !== null) ? (data[key] || '-') : '-';
+                    return `${key}: <span class="font-bold text-emerald-600">${val}</span>`;
+                }).join(' | ');
+            } else if (k === 'Tarawih') {
+                return `Status: <b>${data.status || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b>`;
+            } else if (k === 'Puasa') {
+                return `Status: <b>${data.status || (typeof data === 'string' ? data : '-')}</b>`;
+            } else if (k === 'Tadarus') {
+                return `Metode: <b>${data.pilihan || '-'}</b>, Surat: <b>${data.surat || '-'}</b> (${data.ayat || '-'})`;
+            } else if (k === 'Ceramah') {
+                return `Penceramah: <b>${data.penceramah || '-'}</b>, Lokasi: <b>${data.tempat || '-'}</b><br><span class="text-xs italic">"${data.ringkasan || '-'}"</span>`;
+            }
+            return typeof data === 'object' ? JSON.stringify(data) : data;
         }
 
         async function init() { 
