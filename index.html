@@ -62,10 +62,10 @@
                 id = window.location.href.split('id=')[1].split('&')[0];
             }
             if (id) {
-                sessionStorage.setItem('current_school_id', id);
+                localStorage.setItem('current_school_id', id);
                 return id;
             }
-            return sessionStorage.getItem('current_school_id');
+            return localStorage.getItem('current_school_id');
         }
 
         let SCHOOL_ID = getSchoolId();
@@ -153,6 +153,8 @@
             return d;
         }
 
+        /** * LOGIKA PENGGABUNGAN DATA (DEEP MERGE)
+         */
         function getMergedRecords(records) {
             const map = new Map();
             records.forEach(r => {
@@ -163,11 +165,11 @@
                     let existing = map.get(key);
                     if (r.kategori === 'Shalat Fardu') {
                         let existingData = parseRecordData(existing.hadir) || {};
-                        if (typeof existingData !== 'object' || existingData === null) existingData = { 'Status': existingData };
+                        if (typeof existingData !== 'object' || existingData === null) existingData = { 'Info': existingData };
                         if (typeof incomingData === 'object' && incomingData !== null) {
                             Object.assign(existingData, incomingData);
                         } else {
-                            existingData['Catatan'] = incomingData;
+                            existingData['Detail'] = incomingData;
                         }
                         existing.hadir = JSON.stringify(existingData);
                     } else {
@@ -217,10 +219,6 @@
                                 if (typeof data === 'object' && data !== null) tarawihData[tgl] = { ...tarawihData[tgl], ...data };
                             } else if (r.kategori === 'Puasa') {
                                 puasaData[tgl] = (typeof data === 'object' && data !== null ? data.status : data);
-                            } else if (r.kategori === 'Tadarus') {
-                                if (typeof data === 'object' && data !== null) tadarusData[tgl] = { ...tadarusData[tgl], ...data };
-                            } else if (r.kategori === 'Ceramah') {
-                                if (typeof data === 'object' && data !== null) ceramahData[tgl] = { ...ceramahData[tgl], ...data };
                             }
                         }
                     });
@@ -238,11 +236,12 @@
             if (k === 'Shalat Fardu') {
                 if (typeof d !== 'object' || d === null) return `<b>${d}</b>`;
                 const ordered = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-                // FORMAT: Subuh: berjamaah Dzuhur: munfarid Ashar: berjamaah
-                return ordered
+                // FORMAT MENDATAR: Subuh: berjamaah Dzuhur: munfarid Ashar: berjamaah
+                const text = ordered
                     .filter(key => d[key])
                     .map(key => `<span class="mr-3 whitespace-nowrap"><b>${key}:</b> ${d[key]}</span>`)
                     .join(' ');
+                return text || '-';
             }
             if (k === 'Tarawih') return d.status ? `<b>${d.status}</b> di ${d.tempat || '-'}` : '-';
             if (k === 'Puasa') return typeof d === 'string' ? `<b>${d}</b>` : `<b>${d.status || '-'}</b>`;
@@ -257,7 +256,7 @@
                     <div class="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md">
                         <div class="text-center mb-8">
                             <h1 class="text-3xl font-black text-slate-800">Daftar Sekolah</h1>
-                            <p class="text-slate-400 text-sm mt-2">Buat sistem amalan ramadhan khusus sekolah Anda.</p>
+                            <p class="text-slate-400 text-sm mt-2">Buat sistem amalan khusus sekolah Anda.</p>
                         </div>
                         <form id="regForm" class="space-y-4">
                             <input type="email" id="regEmail" placeholder="Gmail Guru" class="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500 font-bold transition-all" required>
@@ -282,19 +281,20 @@
                 const email = document.getElementById('regEmail').value;
                 const school = document.getElementById('regSchool').value;
                 
-                btn.disabled = true; btn.textContent = "Menyiapkan Spreadsheet...";
+                btn.disabled = true; btn.textContent = "Sedang Memproses...";
                 try {
                     const res = await fetch(GOOGLE_SCRIPT_URL, { 
                         method: 'POST', 
-                        body: JSON.stringify({ action: 'registerTeacher', email, nama_sekolah: school })
+                        body: JSON.stringify({ action: 'registerTeacher', email, nama_sekolah: school }),
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                     });
                     const data = await res.json();
                     if (data.ss_id) {
                         document.getElementById('regResult').classList.remove('hidden');
-                        sessionStorage.setItem('current_school_id', data.ss_id);
+                        localStorage.setItem('current_school_id', data.ss_id);
                         document.getElementById('shareLink').value = window.location.href.split('?')[0] + '?id=' + data.ss_id;
                         btn.textContent = "Berhasil!";
-                        showToast("Sekolah Berhasil Didaftarkan!");
+                        showToast("Sekolah Terdaftar!");
                     }
                 } catch (err) { 
                     btn.disabled = false; btn.textContent = "Coba Lagi"; 
@@ -416,7 +416,7 @@
                         <div class="space-y-8">
                             ${['Subuh','Dzuhur','Ashar','Maghrib','Isya'].map(w => `
                                 <div class="pb-6 border-b border-gray-50 last:border-0">
-                                    <p class="font-black text-gray-400 text-[11px] uppercase tracking-widest mb-4">SHALAT ${w}</p>
+                                    <p class="font-black text-gray-400 text-[11px] uppercase tracking-widest mb-4 flex items-center gap-2">SHALAT ${w}</p>
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                         ${['berjamaah','munfarid','haid','tidak shalat'].map(s => `
                                             <button class="sh-btn px-2 py-4 text-[10px] rounded-2xl border-2 font-black transition-all ${shalatData[t]?.[w] === s ? 'bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]' : 'bg-gray-50 text-gray-400 border-transparent hover:border-emerald-200'}" data-t="${t}" data-w="${w}" data-s="${s}">${s.toUpperCase()}</button>
@@ -436,7 +436,7 @@
                 area.querySelectorAll('.sv-wkt-btn').forEach(b => b.onclick = (e) => handleSimpanPerWaktu(e.target.dataset.t, e.target.dataset.w));
                 
             } else if (currentTab === 'Tarawih') {
-                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-indigo-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="mb-6"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">STATUS</p><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-1 py-4 text-[9px] border-2 rounded-2xl font-black ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div></div><div class="mb-8"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">LOKASI</p><div class="grid grid-cols-2 gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-4 text-[10px] border-2 rounded-2xl font-black ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-tmp="${tmp}">${tmp.toUpperCase()}</button>`).join('')}</div></div><button class="sv-harian w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
+                area.innerHTML = `<div class="space-y-6">${days.map(t => `<div class="p-8 border-2 border-white rounded-[2.5rem] bg-white shadow-xl"><h3 class="font-black text-indigo-900 mb-6 text-xl">📅 HARI KE-${t}</h3><div class="mb-6"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">STATUS PELAKSANAAN</p><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${['berjamaah','munfarid','tidak mengerjakan','sakit','haid'].map(s => `<button class="tr-s px-1 py-4 text-[9px] border-2 rounded-2xl font-black ${tarawihData[t]?.status === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-s="${s}">${s.toUpperCase()}</button>`).join('')}</div></div><div class="mb-8"><p class="text-[10px] font-black text-gray-400 mb-3 uppercase tracking-widest">LOKASI</p><div class="grid grid-cols-2 gap-2">${['mesjid','rumah'].map(tmp => `<button class="tr-t px-4 py-4 text-[10px] border-2 rounded-2xl font-black ${tarawihData[t]?.tempat === tmp ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 border-transparent text-gray-400'}" data-t="${t}" data-tmp="${tmp}">${tmp.toUpperCase()}</button>`).join('')}</div></div><button class="sv-harian w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg uppercase text-xs tracking-widest" data-t="${t}">💾 SIMPAN TARAWIH</button></div>`).join('')}</div>`;
                 area.querySelectorAll('.tr-s').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].status = e.target.dataset.s; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.tr-t').forEach(b => b.onclick = (e) => { tarawihData[e.target.dataset.t].tempat = e.target.dataset.tmp; saveUserState(); renderContentArea(); });
                 area.querySelectorAll('.sv-harian').forEach(b => b.onclick = (e) => handleSimpanHarian(e.target.dataset.t));
@@ -465,16 +465,14 @@
             const btn = document.querySelector(`.sv-wkt-btn[data-t="${tgl}"][data-w="${wkt}"]`);
             btn.disabled = true; btn.textContent = 'MENGIRIM...';
             
-            const singlePrayerData = {};
-            singlePrayerData[wkt] = status;
-
+            const currentDayShalat = shalatData[tgl];
             const record = { 
                 ss_id: SCHOOL_ID, 
                 nama: currentUser.nama, 
                 kelas: currentUser.kelas, 
                 kategori: 'Shalat Fardu', 
                 tanggal: tgl, 
-                hadir: JSON.stringify(singlePrayerData),
+                hadir: JSON.stringify(currentDayShalat),
                 sheet: 'Shalat Fardu'
             };
 
@@ -482,13 +480,18 @@
             saveAllRecords();
             
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify(record),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
                 showToast(`${wkt} Berhasil Disimpan!`);
-            } catch (e) { showToast("Gagal menyimpan.", false); }
+            } catch (e) { showToast("Gagal kirim ke Spreadsheet.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${wkt.toUpperCase()}`; }
         }
 
         async function handleSimpanHarian(tgl) {
+            if (!SCHOOL_ID) return showToast("Gunakan Link dari Guru!", false);
             let detailObj = null;
             if (currentTab === 'Tarawih') detailObj = tarawihData[tgl];
             else if (currentTab === 'Puasa') detailObj = { status: puasaData[tgl] };
@@ -514,9 +517,13 @@
             saveAllRecords();
 
             try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
+                await fetch(GOOGLE_SCRIPT_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify(record),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
                 showToast(`Data Berhasil Disimpan!`);
-            } catch (e) { showToast("Gagal terhubung.", false); }
+            } catch (e) { showToast("Gagal terhubung ke Cloud.", false); }
             finally { btn.disabled = false; btn.textContent = `💾 SIMPAN ${currentTab.toUpperCase()}`; }
         }
 
