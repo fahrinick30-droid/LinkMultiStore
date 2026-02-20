@@ -356,7 +356,6 @@
 
     // --- VIEW: REKAP SAYA ---
     window.showRekapPage = async () => {
-        // Fetch latest data first
         showToast("Memuat rekap...");
         try {
             const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=read&ss_id=${SCHOOL_ID}&nama=${currentUser.nama}&kelas=${currentUser.kelas}`);
@@ -489,33 +488,47 @@
             </div>`;
     }
 
-    // --- PERBAIKAN: Fungsi renderDetail yang lebih kokoh ---
+    // --- PERBAIKAN: Fungsi renderDetail yang lebih cerdas ---
     function renderDetail(k, d) {
-        // Coba parsing jika d adalah string JSON
-        if (typeof d === 'string') {
+        if (!d) return '-';
+
+        // 1. Jika data berupa string JSON, coba parse dulu
+        if (typeof d === 'string' && (d.startsWith('{') || d.startsWith('['))) {
             try {
                 const parsed = JSON.parse(d);
                 if (parsed && typeof parsed === 'object') d = parsed;
             } catch (e) {
-                // Biarkan d tetap string jika gagal parse
+                // Biarkan tetap string jika gagal parse
             }
         }
         
-        // Kasus dasar: data kosong
-        if (!d) return '-';
-        
-        // Jika d masih string setelah dicoba parse (misal: data lama berupa string "berjamaah")
-        if (typeof d === 'string') return `<b>${d}</b>`;
+        // 2. Jika d adalah string teks biasa (misal: "berjamaah"), tampilkan langsung
+        // Ini kunci untuk mencegah split string "b | e | r..."
+        if (typeof d === 'string') {
+            return `<b>${d}</b>`;
+        }
 
-        // Kasus khusus kategori: Shalat Fardu (Objek berisi kunci nama shalat)
+        // 3. Jika d adalah Objek (biasanya Shalat Fardu)
         if (k === 'Shalat Fardu') {
-            // Pastikan kita benar-benar mengiterasi kunci objek, bukan indeks string
-            return Object.keys(d)
-                .filter(w => d[w] && isNaN(w)) // Filter hanya kunci yang memiliki nilai dan bukan angka (indeks)
-                .map(w => `${w}: <b>${d[w]}</b>`)
-                .join(' | ') || `<b>${JSON.stringify(d)}</b>`;
+            const prayerNames = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+            
+            // Cek apakah ini objek shalat yang valid
+            const activePrayers = Object.keys(d).filter(key => prayerNames.includes(key) && d[key]);
+            
+            if (activePrayers.length > 0) {
+                return activePrayers.map(w => `${w}: <b>${d[w]}</b>`).join(' | ');
+            }
+            
+            // Fallback: Jika objek berisi indeks numerik (ini indikasi string yang tidak sengaja ter-JSON stringify)
+            const keys = Object.keys(d);
+            if (keys.length > 0 && keys.every(key => !isNaN(key))) {
+                return `<b>${Object.values(d).join('')}</b>`;
+            }
+
+            return `<b>${JSON.stringify(d)}</b>`;
         }
         
+        // 4. Kategori lain yang menggunakan struktur objek tetap
         if (k === 'Tarawih') return `Status: <b>${d.status || '-'}</b>, Lokasi: <b>${d.tempat || '-'}</b>`;
         if (k === 'Puasa') return `Status: <b>${typeof d === 'object' ? (d.status || '-') : d}</b>`;
         if (k === 'Tadarus') return `Metode: <b>${d.pilihan || '-'}</b>, Surat: <b>${d.surat || '-'}</b> (Ayat: ${d.ayat || '-'})`;
