@@ -49,12 +49,12 @@
         @keyframes pulseBlue {
           0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
           70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
         }
         @keyframes pulseGreen {
           0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
           70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
         }
         .pulse-blue { animation: pulseBlue 2s infinite; }
         .pulse-green { animation: pulseGreen 2s infinite; }
@@ -68,10 +68,8 @@
          */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
         
-        // Link Info (Opsional)
         const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
-        // Logika ID Sekolah
         function getSchoolId() {
             const params = new URLSearchParams(window.location.search);
             let id = params.get('id');
@@ -85,7 +83,6 @@
         }
 
         let SCHOOL_ID = getSchoolId();
-        let TEACHER_EMAIL = ""; // Opsional, data tetap tersimpan di Cloud
 
         const defaultConfig = {
             app_title: "Amalan Ramadhan Siswa",
@@ -205,7 +202,6 @@
 
         function isAdmin() { return currentUser && currentUser.nama_lengkap === '*' && currentUser.password === '*'; }
 
-        // --- SISTEM LAMA: REGISTRASI SEKOLAH ---
         function renderRegistration() {
             document.getElementById('app').innerHTML = `
                 <div class="min-h-screen flex items-center justify-center p-6 bg-emerald-600">
@@ -237,13 +233,10 @@
                 const emailInput = document.getElementById('regEmail').value;
                 const schoolInput = document.getElementById('regSchool').value;
                 
-                const emailCheck = emailInput.trim().toLowerCase();
-                const schoolCheck = schoolInput.trim().toLowerCase();
-
                 const localHistory = JSON.parse(localStorage.getItem('reg_history') || '[]');
                 const isDuplicate = localHistory.some(item => 
-                    item.email.toLowerCase() === emailCheck && 
-                    item.school.toLowerCase() === schoolCheck
+                    item.email.toLowerCase() === emailInput.trim().toLowerCase() && 
+                    item.school.toLowerCase() === schoolInput.trim().toLowerCase()
                 );
 
                 if (isDuplicate) {
@@ -300,17 +293,13 @@
                 document.body.removeChild(ta);
             };
             if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text)
-                    .then(() => showToast("Link disalin!"))
-                    .catch((err) => { runFallback(); });
-            } else {
-                runFallback();
-            }
+                navigator.clipboard.writeText(text).then(() => showToast("Link disalin!")).catch(() => runFallback());
+            } else { runFallback(); }
         };
 
         window.downloadLink = () => {
             const link = document.getElementById('shareLink').value;
-            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Kelas : Pilih Kelas\n4. Klik Masuk.\n\nGunakan Panel Guru untuk memantau rekap amalan dan mencetak laporan siswa secara otomatis.`;
+            const textContent = `INFO AKSES APLIKASI AMALAN RAMADHAN\n-----------------------------------------\nLINK SISWA : \n${link}\n\nCARA MASUK KE PANEL GURU:\n-----------------------------------------\n1. Buka link di atas.\n2. Nama Lengkap Siswa : * (tanda bintang)\n3. Kelas : Pilih Kelas\n4. Klik Masuk.\n\nGunakan Panel Guru untuk memantau rekap amalan dan mengunduh laporan siswa secara otomatis.`;
             const blob = new Blob([textContent], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -332,7 +321,6 @@
                 
                 const response = await fetch(url);
                 const result = await response.json();
-                
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
@@ -434,7 +422,6 @@
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
             if (isAdmin()) return showLaporanPage();
-            
             const config = window.elementSdk?.config || defaultConfig;
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto" style="background: ${config.background_color};">
@@ -648,7 +635,10 @@
             };
         }
 
-        function handleCetakGlobal(tingkat, kelas) {
+        /**
+         * FUNGSI UNDUH REKAP GLOBAL UNTUK GURU
+         */
+        function handleUnduhRekapGlobal(tingkat, kelas) {
             const allMerged = getMergedRecords(allRecords);
             let students = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s));
             if (tingkat !== "Semua") students = students.filter(s => s.kelas.startsWith(tingkat));
@@ -657,46 +647,77 @@
 
             if (students.length === 0) return showToast("Tidak ada data siswa untuk filter ini", false);
 
-            const printWindow = window.open('', '_blank');
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            
-            let html = `<html><head><title>Rekapitulasi Amalan Ramadhan</title><style>
-                body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
-                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-                th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
-                th { background: #eee; }
-                .footer { display: flex; justify-content: flex-end; margin-top: 40px; }
-                .sig { text-align: center; width: 200px; }
-            </style></head><body>
-                <div class="header"><h1>Rekapitulasi Amalan Ramadhan Siswa</h1><div>Filter: Tingkat ${tingkat} | Kelas ${kelas}</div><div>Tahun Pelajaran 2025/2026</div></div>
-                <table><thead><tr><th>No</th><th>Nama Siswa</th><th>Kelas</th><th>Total Data</th><th>Status</th></tr></thead><tbody>`;
-            
+            let text = `REKAPITULASI AMALAN RAMADHAN SISWA\n`;
+            text += `Filter: Tingkat ${tingkat} | Kelas ${kelas}\n`;
+            text += `Tahun Pelajaran 2025/2026\n`;
+            text += `------------------------------------------------------------\n`;
+            text += `NO | NAMA SISWA | KELAS | TOTAL DATA | STATUS\n`;
+            text += `------------------------------------------------------------\n`;
+
             students.forEach((s, idx) => {
                 const count = allMerged.filter(r => r.nama === s.nama && r.kelas === s.kelas).length;
-                html += `<tr><td>${idx+1}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${count}</td><td>${count > 0 ? 'Aktif' : 'Belum Ada'}</td></tr>`;
+                const status = count > 0 ? 'Aktif' : 'Belum Ada';
+                text += `${(idx+1).toString().padEnd(2)} | ${s.nama.padEnd(20)} | ${s.kelas.padEnd(5)} | ${count.toString().padEnd(10)} | ${status}\n`;
             });
 
-            html += `</tbody></table>
-                <div class="footer"><div class="sig"><div>Sumedang, ${dateStr}</div><div style="font-weight:bold; margin-bottom: 60px;">Guru PAI</div><div>( ........................................ )</div></div></div>
-                <script>window.onload = () => window.print();<\/script></body></html>`;
-            printWindow.document.write(html);
-            printWindow.document.close();
+            text += `------------------------------------------------------------\n`;
+            text += `Dicetak pada: ${dateStr}\n\n`;
+            text += `Guru PAI,\n\n\n\n( ........................................ )`;
+
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Rekap_Ramadhan_Tingkat${tingkat}_Kelas${kelas}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showToast("Rekapitulasi berhasil diunduh!");
         }
 
-        function showCetakDialog() {
+        function showDownloadDialog() {
             const overlay = document.createElement('div');
             overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-[80] flex items-center justify-center p-4 transition-opacity duration-200';
             overlay.style.opacity = '0';
             const modal = document.createElement('div');
             modal.className = 'bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full transform transition-all duration-200 scale-95';
-            modal.innerHTML = `<h3 class="text-xl font-black text-gray-800 mb-4 border-b pb-2">Opsi Cetak Laporan</h3><div class="space-y-4 mb-6 text-sm"><div><label class="block font-bold text-gray-600 mb-1">Pilih Tingkat</label><select id="selTingkat" class="w-full p-2 border rounded-lg bg-gray-50"><option value="Semua">Semua Tingkat</option><option value="7">Tingkat 7</option><option value="8">Tingkat 8</option><option value="9">Tingkat 9</option></select></div><div><label class="block font-bold text-gray-600 mb-1">Pilih Kelas</label><select id="selKelas" class="w-full p-2 border rounded-lg bg-gray-50"><option value="Semua">Semua Kelas (A-J)</option>${['A','B','C','D','E','F','G','H','I','J'].map(k => `<option value="${k}">Kelas ${k}</option>`).join('')}</select></div></div><div class="flex gap-2"><button class="modal-cancel-btn flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">Batal</button><button class="modal-print-btn flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">🖨️ Cetak</button></div>`;
+            modal.innerHTML = `
+                <h3 class="text-xl font-black text-gray-800 mb-4 border-b pb-2">Opsi Unduh Laporan</h3>
+                <div class="space-y-4 mb-6 text-sm">
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Pilih Tingkat</label>
+                        <select id="selTingkat" class="w-full p-2 border rounded-lg bg-gray-50">
+                            <option value="Semua">Semua Tingkat</option>
+                            <option value="7">Tingkat 7</option>
+                            <option value="8">Tingkat 8</option>
+                            <option value="9">Tingkat 9</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Pilih Kelas</label>
+                        <select id="selKelas" class="w-full p-2 border rounded-lg bg-gray-50">
+                            <option value="Semua">Semua Kelas (A-J)</option>
+                            ${['A','B','C','D','E','F','G','H','I','J'].map(k => `<option value="${k}">Kelas ${k}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button class="modal-cancel-btn flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">Batal</button>
+                    <button class="modal-download-btn flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">💾 Unduh</button>
+                </div>`;
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
             requestAnimationFrame(() => { overlay.style.opacity = '1'; modal.classList.add('scale-100'); });
             const close = () => { overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 200); };
             overlay.querySelector('.modal-cancel-btn').onclick = close;
-            overlay.querySelector('.modal-print-btn').onclick = () => { const tingkat = modal.querySelector('#selTingkat').value; const kelas = modal.querySelector('#selKelas').value; close(); handleCetakGlobal(tingkat, kelas); };
+            overlay.querySelector('.modal-download-btn').onclick = () => { 
+                const tingkat = modal.querySelector('#selTingkat').value; 
+                const kelas = modal.querySelector('#selKelas').value; 
+                close(); 
+                handleUnduhRekapGlobal(tingkat, kelas); 
+            };
         }
 
         function showLaporanPage() {
@@ -709,9 +730,8 @@
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
                             <h1 class="font-black text-2xl text-slate-800 flex items-center gap-2">📋 PANEL GURU</h1>
                             <div class="flex flex-wrap gap-2">
-                                <!-- Tombol Refresh Dihapus Sesuai Permintaan -->
                                 ${hasInfoFiles ? `<button id="infoBtn" class="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold flex items-center gap-2">ℹ️ INFORMASI</button>` : ''}
-                                <button id="cetakGlobalBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold flex items-center gap-2">🖨️ CETAK LAPORAN</button>
+                                <button id="downloadGlobalBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold flex items-center gap-2">💾 UNDUH LAPORAN</button>
                                 <button id="adminLogOut" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">KELUAR</button>
                             </div>
                         </div>
@@ -786,57 +806,14 @@
             if(document.getElementById('infoBtn')) {
                 document.getElementById('infoBtn').onclick = () => window.open(INFO_DRIVE_URL, '_blank');
             }
-            document.getElementById('cetakGlobalBtn').onclick = showCetakDialog;
+            document.getElementById('downloadGlobalBtn').onclick = showDownloadDialog;
             document.getElementById('adminLogOut').onclick = handleLogout;
 
             renderFilteredStudents();
         }
 
-        function handleCetakLaporanIndividual(student, dataRaw) {
-            const data = getMergedRecords(dataRaw);
-            const printWindow = window.open('', '_blank');
-            const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            let html = `<html><head><title>Laporan - ${student.nama}</title><style>
-                body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-                .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px; }
-                .info { margin-bottom: 20px; }
-                .tbl { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .tbl th, .tbl td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 13px; }
-                .tbl th { background: #f2f2f2; }
-                .footer { margin-top: 40px; display: flex; justify-content: flex-end; }
-                .sig { text-align: center; width: 250px; }
-                @media print { .no-print { display: none; } }
-            </style></head><body>
-                <div class="header"><h1>LAPORAN AMALAN RAMADHAN SISWA</h1><div>Tahun 1447 H / 2026 M</div></div>
-                <div class="info"><b>Nama:</b> ${student.nama}<br><b>Kelas:</b> ${student.kelas}</div>`;
-            
-            categories.forEach(cat => {
-                const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
-                if(recs.length > 0) {
-                    html += `<h3>${getCategoryIcon(cat)} ${cat}</h3><table class="tbl"><thead><tr><th width="80">Hari Ke-</th><th>Keterangan Amalan</th></tr></thead><tbody>`;
-                    recs.forEach(r => { html += `<tr><td>${r.tanggal}</td><td>${renderDetailData(cat, parseRecordData(r.hadir))}</td></tr>`; });
-                    html += `</tbody></table>`;
-                }
-            });
-
-            html += `
-                <div class="footer">
-                    <div class="sig">
-                        <div>Mengetahui,</div>
-                        <div style="margin-bottom: 5px;">Sumedang, ${dateStr}</div>
-                        <div style="font-weight:bold;">Orang Tua</div>
-                        <div style="height:70px;"></div>
-                        <div style="font-weight:bold;">( ........................................ )</div>
-                    </div>
-                </div>
-                <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }<\/script>
-            </body></html>`;
-            printWindow.document.write(html);
-            printWindow.document.close();
-        }
-
         /**
-         * FITUR BARU: UNDUH LAPORAN SEBAGAI FILE TEKS (SUBSTITUSI GMAIL/DRIVE)
+         * FITUR UNDUH LAPORAN INDIVIDUAL (FILE TEKS)
          */
         function handleUnduhLaporan(student, dataRaw) {
             const data = getMergedRecords(dataRaw);
@@ -846,7 +823,6 @@
             bodyText += `Tahun 1447 H / 2026 M\n\n`;
             bodyText += `Nama   : ${student.nama}\n`;
             bodyText += `Kelas  : ${student.kelas}\n`;
-            bodyText += `Sekolah: ${window.elementSdk?.config?.app_title || 'Multi-School'}\n`;
             bodyText += `-------------------------------------------\n\n`;
 
             categories.forEach(cat => {
@@ -877,7 +853,7 @@
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            showToast("Laporan berhasil diunduh ke perangkat!");
+            showToast("Laporan berhasil diunduh!");
         }
 
         function showStudentDetail(s) {
@@ -890,7 +866,7 @@
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
                             <div><h2 class="font-black text-2xl text-slate-800">${s.nama}</h2><p class="font-bold text-emerald-600 italic">Kelas: ${s.kelas}</p></div>
                             <div class="flex gap-2">
-                                <button id="individualCetak" class="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold shadow-md flex items-center gap-2">🖨️ CETAK LAPORAN</button>
+                                <button id="individualDownload" class="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold shadow-md flex items-center gap-2">💾 UNDUH LAPORAN</button>
                                 <button id="backAdmin" class="px-5 py-2 bg-slate-800 text-white rounded-xl font-bold shadow-md">← KEMBALI</button>
                             </div>
                         </div>
@@ -903,7 +879,7 @@
                     </div>
                 </div>`;
             document.getElementById('backAdmin').onclick = showLaporanPage;
-            document.getElementById('individualCetak').onclick = () => handleCetakLaporanIndividual(s, dataRaw);
+            document.getElementById('individualDownload').onclick = () => handleUnduhLaporan(s, dataRaw);
         }
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
@@ -937,16 +913,13 @@
                         currentUser = JSON.parse(saved); 
                         loadUserState(); 
                         showAmalanPage(); 
-                        // Sinkronisasi otomatis untuk siswa tetap dipertahankan
                         if (!isAdmin()) setTimeout(syncUserFromCloud, 500); 
                     } catch (e) { 
                         safeRemoveStorage('ramadhanUser'); 
                         currentUser = null; 
                         showLoginPage(); 
                     } 
-                } else { 
-                    showLoginPage(); 
-                }
+                } else { showLoginPage(); }
             }
             if (window.dataSdk) await window.dataSdk.init({ onDataChanged(d) { allRecords = d; saveAllRecords(); } }); 
             if (window.elementSdk) window.elementSdk.init({ defaultConfig, onConfigChange: (c) => Object.assign(window.elementSdk.config, c) }); 
