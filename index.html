@@ -45,7 +45,6 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
         
-        /* Animasi */
         @keyframes pulseBlue {
           0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
           70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
@@ -67,7 +66,6 @@
          * KONFIGURASI SISTEM LAMA (MULTI-SCHOOL)
          */
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7IjJZdiHITMGhSMSWWneT1E9qIWUOBwkuJv4krc4_IPk-pQYA1hgFXyNfMu9oKjr6Bw/exec';
-        
         const INFO_DRIVE_URL = 'https://drive.google.com/drive/folders/1p_MFakH19ATtDCS7zxaZ89zIAV_t6czu?usp=drive_link';
         
         function getSchoolId() {
@@ -83,6 +81,7 @@
         }
 
         let SCHOOL_ID = getSchoolId();
+        let SCHOOL_NAME = ""; // Akan diisi dari database Google Sheet
 
         const defaultConfig = {
             app_title: "Amalan Ramadhan Siswa",
@@ -321,6 +320,16 @@
                 
                 const response = await fetch(url);
                 const result = await response.json();
+
+                // DINAMIS: Ambil nama sekolah dari database dan jadikan judul aplikasi
+                if (result.school_name) {
+                    SCHOOL_NAME = result.school_name;
+                    window.elementSdk.config.app_title = `Amalan Ramadhan ${SCHOOL_NAME}`;
+                    // Update tampilan judul jika halaman amalan sedang aktif
+                    const titleEl = document.getElementById('appTitleDisplay');
+                    if (titleEl) titleEl.textContent = window.elementSdk.config.app_title;
+                }
+
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
@@ -349,20 +358,19 @@
             document.body.appendChild(loadingToast);
             
             try {
-                const checkUrl = new URL(GOOGLE_SCRIPT_URL);
-                checkUrl.searchParams.append('action', 'checkInfo');
-                const checkRes = await fetch(checkUrl);
-                const checkData = await checkRes.json();
-                hasInfoFiles = checkData.hasFiles === true;
-            } catch (e) { hasInfoFiles = true; }
-
-            try {
                 const url = new URL(GOOGLE_SCRIPT_URL);
                 url.searchParams.append('action', 'readAll');
                 url.searchParams.append('ss_id', SCHOOL_ID);
                 
                 const response = await fetch(url);
                 const result = await response.json();
+                
+                // Update Nama Sekolah di Admin
+                if (result.school_name) {
+                    SCHOOL_NAME = result.school_name;
+                    window.elementSdk.config.app_title = `Amalan Ramadhan ${SCHOOL_NAME}`;
+                }
+
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     allRecords = result.data.map(item => ({
                         nama: item.nama, kelas: item.kelas, kategori: item.kategori, tanggal: item.tanggal, hadir: item.detail || item.hadir
@@ -391,7 +399,7 @@
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4" style="background: ${config.background_color};">
                     <div class="w-full max-w-md rounded-2xl shadow-2xl p-8 bg-white">
-                        <h1 class="text-center font-bold text-3xl mb-2 text-emerald-700">${config.app_title}</h1>
+                        <h1 class="text-center font-bold text-3xl mb-2 text-emerald-700" id="loginTitle">${config.app_title}</h1>
                         <p class="text-center text-sm mb-8 text-gray-500">${config.welcome_message}</p>
                         <form id="loginForm" class="space-y-4">
                             <div><label class="block mb-1 font-semibold text-gray-700">Nama Lengkap Siswa</label><input type="text" id="nama" value="${lastNama}" class="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"></div>
@@ -421,13 +429,13 @@
 
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
-            if (isAdmin()) return showLaporanPage();
+            if (isAdmin()) return (fetchAllDataForAdmin(), showLaporanPage());
             const config = window.elementSdk?.config || defaultConfig;
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto" style="background: ${config.background_color};">
                     <div class="max-w-4xl mx-auto p-4 md:p-6 pb-24">
                         <div class="rounded-2xl shadow-xl p-6 mb-6 bg-white">
-                            <h1 class="font-bold text-2xl mb-4 text-emerald-800">${config.app_title}</h1>
+                            <h1 class="font-bold text-2xl mb-4 text-emerald-800" id="appTitleDisplay">${config.app_title}</h1>
                             <div class="mb-6 bg-emerald-50 p-4 rounded-xl text-sm border border-emerald-100">
                                 <p class="mb-1 text-emerald-900"><strong>👤 Nama:</strong> ${currentUser.nama_lengkap}</p>
                                 <p class="text-emerald-900"><strong>🏫 Kelas:</strong> ${currentUser.kelas}</p>
@@ -635,9 +643,6 @@
             };
         }
 
-        /**
-         * FUNGSI UNDUH REKAP GLOBAL UNTUK GURU
-         */
         function handleUnduhRekapGlobal(tingkat, kelas) {
             const allMerged = getMergedRecords(allRecords);
             let students = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s));
@@ -649,6 +654,7 @@
 
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
             let text = `REKAPITULASI AMALAN RAMADHAN SISWA\n`;
+            text += `Sekolah: ${SCHOOL_NAME || 'Multi-School'}\n`;
             text += `Filter: Tingkat ${tingkat} | Kelas ${kelas}\n`;
             text += `Tahun Pelajaran 2025/2026\n`;
             text += `------------------------------------------------------------\n`;
@@ -723,12 +729,13 @@
         function showLaporanPage() {
             const allMerged = getMergedRecords(allRecords);
             const allS = [...new Set(allMerged.map(r => JSON.stringify({nama: r.nama, kelas: r.kelas})))].map(s => JSON.parse(s)).sort((a,b) => a.nama.localeCompare(b.nama));
-            
+            const config = window.elementSdk?.config || defaultConfig;
+
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto bg-slate-100 p-4 md:p-6">
                     <div class="max-w-6xl mx-auto">
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 class="font-black text-2xl text-slate-800 flex items-center gap-2">📋 PANEL GURU</h1>
+                            <h1 class="font-black text-2xl text-slate-800 flex items-center gap-2">📋 PANEL GURU (${SCHOOL_NAME || 'Sistem Multi-School'})</h1>
                             <div class="flex flex-wrap gap-2">
                                 ${hasInfoFiles ? `<button id="infoBtn" class="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold flex items-center gap-2">ℹ️ INFORMASI</button>` : ''}
                                 <button id="downloadGlobalBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold flex items-center gap-2">💾 UNDUH LAPORAN</button>
@@ -812,15 +819,13 @@
             renderFilteredStudents();
         }
 
-        /**
-         * FITUR UNDUH LAPORAN INDIVIDUAL (FILE TEKS)
-         */
         function handleUnduhLaporan(student, dataRaw) {
             const data = getMergedRecords(dataRaw);
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
             
             let bodyText = `LAPORAN AMALAN RAMADHAN SISWA\n`;
-            bodyText += `Tahun 1447 H / 2026 M\n\n`;
+            bodyText += `Tahun 1447 H / 2026 M\n`;
+            bodyText += `Sekolah: ${SCHOOL_NAME || 'Multi-School'}\n\n`;
             bodyText += `Nama   : ${student.nama}\n`;
             bodyText += `Kelas  : ${student.kelas}\n`;
             bodyText += `-------------------------------------------\n\n`;
@@ -883,9 +888,7 @@
         }
 
         function getCategoryIcon(k) { switch(k) { case 'Shalat Fardu': return '🕌'; case 'Tarawih': return '🌙'; case 'Puasa': return '🍽️'; case 'Tadarus': return '📖'; case 'Ceramah': return '🎙️'; default: return '📝'; } }
-        
         function parseRecordData(d) { try { return typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return d; } }
-        
         function renderDetailData(k, d) {
             d = parseRecordData(d);
             if (!d) return '-'; 
