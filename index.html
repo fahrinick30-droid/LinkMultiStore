@@ -85,6 +85,7 @@
         }
 
         let SCHOOL_ID = getSchoolId();
+        let TEACHER_EMAIL = ""; // Akan diisi saat sinkronisasi amalan
 
         const defaultConfig = {
             app_title: "Amalan Ramadhan Siswa",
@@ -331,6 +332,9 @@
                 
                 const response = await fetch(url);
                 const result = await response.json();
+                
+                if (result.teacher_email) TEACHER_EMAIL = result.teacher_email;
+
                 if (result.status === 'success' && Array.isArray(result.data)) {
                     result.data.forEach(item => {
                         const tgl = item.tanggal;
@@ -431,7 +435,6 @@
 
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
-            // Penghapusan refresh otomatis: Hanya tampilkan halaman laporan tanpa memanggil fetchAllDataForAdmin secara otomatis
             if (isAdmin()) return showLaporanPage();
             
             const config = window.elementSdk?.config || defaultConfig;
@@ -446,7 +449,7 @@
                             </div>
                             <div class="flex flex-wrap gap-3">
                                 <button id="rekapBtn" class="flex-1 px-4 py-2.5 rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md font-bold flex items-center justify-center gap-2">📊 Rekap Saya</button>
-                                <button id="printMyReportBtn" class="flex-1 px-4 py-2.5 rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-md font-bold flex items-center justify-center gap-2">🖨️ Cetak Laporan</button>
+                                <button id="sendToTeacherBtn" class="flex-1 px-4 py-2.5 rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-md font-bold flex items-center justify-center gap-2">📧 Kirim ke Guru</button>
                                 <button id="logoutBtn" class="px-4 py-2.5 rounded-xl text-white bg-red-500 hover:bg-red-600 shadow-md font-bold">Keluar</button>
                             </div>
                         </div>
@@ -465,9 +468,9 @@
             document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = (e) => { currentTab = e.target.dataset.tab; showAmalanPage(); });
             document.getElementById('rekapBtn').onclick = showRekapPage;
             document.getElementById('logoutBtn').onclick = handleLogout;
-            document.getElementById('printMyReportBtn').onclick = () => {
+            document.getElementById('sendToTeacherBtn').onclick = () => {
                 const myRaw = allRecords.filter(r => r.nama === currentUser.nama_lengkap && r.kelas === currentUser.kelas);
-                handleCetakLaporanIndividual({ nama: currentUser.nama_lengkap, kelas: currentUser.kelas }, myRaw);
+                handleKirimLaporanGmail({ nama: currentUser.nama_lengkap, kelas: currentUser.kelas }, myRaw);
             };
             renderContentArea();
         }
@@ -617,7 +620,7 @@
                                 <p class="text-gray-500">Ringkasan data terbaru untuk setiap harinya.</p>
                             </div>
                             <div class="flex gap-2 w-full md:w-auto">
-                                <button id="printMyReportBtnRecap" class="flex-1 px-6 py-3 bg-indigo-600 text-white font-black rounded-xl shadow-lg active:scale-95 flex items-center justify-center gap-2">🖨️ CETAK</button>
+                                <button id="sendToTeacherBtnRecap" class="flex-1 px-6 py-3 bg-indigo-600 text-white font-black rounded-xl shadow-lg active:scale-95 flex items-center justify-center gap-2">📧 KIRIM GURU</button>
                                 <button id="backBtn" class="flex-1 px-6 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg active:scale-95">← KEMBALI</button>
                             </div>
                         </div>
@@ -641,7 +644,10 @@
                     </div>
                 </div>`;
             document.getElementById('backBtn').onclick = showAmalanPage;
-            document.getElementById('printMyReportBtnRecap').onclick = () => handleCetakLaporanIndividual({ nama: currentUser.nama_lengkap, kelas: currentUser.kelas }, myRaw);
+            document.getElementById('sendToTeacherBtnRecap').onclick = () => {
+                const myRaw = allRecords.filter(r => r.nama === currentUser.nama_lengkap && r.kelas === currentUser.kelas);
+                handleKirimLaporanGmail({ nama: currentUser.nama_lengkap, kelas: currentUser.kelas }, myRaw);
+            };
         }
 
         function handleCetakGlobal(tingkat, kelas) {
@@ -779,8 +785,6 @@
             document.getElementById('filterKelas').onchange = (e) => { filterK = e.target.value; renderFilteredStudents(); };
             document.getElementById('searchNama').oninput = (e) => { searchN = e.target.value; renderFilteredStudents(); };
             
-            // Listener untuk sinkronisasi dihapus sesuai permintaan
-            
             if(document.getElementById('infoBtn')) {
                 document.getElementById('infoBtn').onclick = () => window.open(INFO_DRIVE_URL, '_blank');
             }
@@ -831,6 +835,62 @@
             </body></html>`;
             printWindow.document.write(html);
             printWindow.document.close();
+        }
+
+        /**
+         * FITUR BARU: KIRIM LAPORAN KE GMAIL GURU
+         */
+        async function handleKirimLaporanGmail(student, dataRaw) {
+            if (!TEACHER_EMAIL) {
+                // Jika email guru belum terbaca, coba sinkronisasi ulang sebentar
+                await syncUserFromCloud();
+                if (!TEACHER_EMAIL) return showToast("Gagal mengambil email guru. Pastikan guru sudah terdaftar.", false);
+            }
+
+            const data = getMergedRecords(dataRaw);
+            const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            
+            let bodyText = `LAPORAN AMALAN RAMADHAN SISWA\n`;
+            bodyText += `Tahun 1447 H / 2026 M\n\n`;
+            bodyText += `Nama: ${student.nama}\n`;
+            bodyText += `Kelas: ${student.kelas}\n`;
+            bodyText += `-------------------------------------------\n\n`;
+
+            categories.forEach(cat => {
+                const recs = data.filter(r => r.kategori === cat).sort((a,b) => parseInt(a.tanggal) - parseInt(b.tanggal));
+                if(recs.length > 0) {
+                    bodyText += `[ ${cat.toUpperCase()} ]\n`;
+                    recs.forEach(r => {
+                        // Hilangkan tag HTML untuk format teks Gmail
+                        const detailRaw = renderDetailData(cat, parseRecordData(r.hadir));
+                        const detailClean = detailRaw.replace(/<[^>]*>/g, '').replace(/\|/g, ', ');
+                        bodyText += `Hari ke-${r.tanggal}: ${detailClean}\n`;
+                    });
+                    bodyText += `\n`;
+                }
+            });
+
+            bodyText += `-------------------------------------------\n`;
+            bodyText += `Dicetak pada: ${dateStr}\n`;
+            bodyText += `Mengetahui: Orang Tua\n\n`;
+            bodyText += `( ........................................ )`;
+
+            const subject = encodeURIComponent(`Laporan Ramadhan - ${student.nama} (${student.kelas})`);
+            const body = encodeURIComponent(bodyText);
+            
+            // Membuka Gmail dengan parameter yang sudah disiapkan
+            const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${TEACHER_EMAIL}&su=${subject}&body=${body}`;
+            
+            // Fallback mailto jika user tidak ingin via browser gmail
+            const mailtoUrl = `mailto:${TEACHER_EMAIL}?subject=${subject}&body=${body}`;
+            
+            showConfirmDialog("Kirim laporan ke email Guru sekarang?", () => {
+                // Coba buka Gmail Web dulu, jika gagal gunakan mailto standar
+                const newWindow = window.open(gmailUrl, '_blank');
+                if(!newWindow || newWindow.closed || typeof newWindow.closed=='undefined') {
+                    window.location.href = mailtoUrl;
+                }
+            });
         }
 
         function showStudentDetail(s) {
