@@ -431,7 +431,9 @@
 
         function showAmalanPage() {
             if (!currentUser) return showLoginPage();
-            if (isAdmin()) return (showLaporanPage(), fetchAllDataForAdmin());
+            // Penghapusan refresh otomatis: Hanya tampilkan halaman laporan tanpa memanggil fetchAllDataForAdmin secara otomatis
+            if (isAdmin()) return showLaporanPage();
+            
             const config = window.elementSdk?.config || defaultConfig;
             document.getElementById('app').innerHTML = `
                 <div class="w-full h-full overflow-auto" style="background: ${config.background_color};">
@@ -703,7 +705,7 @@
                         <div class="bg-white p-6 rounded-2xl shadow-xl mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
                             <h1 class="font-black text-2xl text-slate-800 flex items-center gap-2">📋 PANEL GURU</h1>
                             <div class="flex flex-wrap gap-2">
-                                <button id="syncBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">🔄 REFRESH</button>
+                                <!-- Tombol Refresh Dihapus Sesuai Permintaan -->
                                 ${hasInfoFiles ? `<button id="infoBtn" class="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold flex items-center gap-2">ℹ️ INFORMASI</button>` : ''}
                                 <button id="cetakGlobalBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold flex items-center gap-2">🖨️ CETAK LAPORAN</button>
                                 <button id="adminLogOut" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">KELUAR</button>
@@ -777,7 +779,8 @@
             document.getElementById('filterKelas').onchange = (e) => { filterK = e.target.value; renderFilteredStudents(); };
             document.getElementById('searchNama').oninput = (e) => { searchN = e.target.value; renderFilteredStudents(); };
             
-            document.getElementById('syncBtn').onclick = fetchAllDataForAdmin;
+            // Listener untuk sinkronisasi dihapus sesuai permintaan
+            
             if(document.getElementById('infoBtn')) {
                 document.getElementById('infoBtn').onclick = () => window.open(INFO_DRIVE_URL, '_blank');
             }
@@ -819,7 +822,7 @@
                     <div class="sig">
                         <div>Mengetahui,</div>
                         <div style="margin-bottom: 5px;">Sumedang, ${dateStr}</div>
-                        <div style="font-weight:bold;">Guru PAI / Orang Tua</div>
+                        <div style="font-weight:bold;">Orang Tua</div>
                         <div style="height:70px;"></div>
                         <div style="font-weight:bold;">( ........................................ )</div>
                     </div>
@@ -887,6 +890,7 @@
                         currentUser = JSON.parse(saved); 
                         loadUserState(); 
                         showAmalanPage(); 
+                        // Sinkronisasi otomatis untuk siswa tetap dipertahankan
                         if (!isAdmin()) setTimeout(syncUserFromCloud, 500); 
                     } catch (e) { 
                         safeRemoveStorage('ramadhanUser'); 
